@@ -1,0 +1,33 @@
+{
+  "name": "mealio-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env-file=../.env",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply mealio --local",
+    "db:migrate:prod": "wrangler d1 migrations apply mealio"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.36.0",
+    "hono": "^4.4.0",
+    "jose": "^5.6.3",
+    "web-push": "^3.6.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.11",
+    "@types/web-push": "^3.6.3",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "drizzle-kit": "^0.27.0",
+    "wrangler": "^3.95.0"
+  }
+}

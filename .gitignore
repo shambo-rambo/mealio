@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Local database (SQLite — dev only)
+mealio.db
+mealio.db-shm
+mealio.db-wal
+
+# Local file uploads (dev only)
+uploads/
+
+# Environment variables — NEVER commit
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Drizzle generated (keep migrations, gitignore snapshots)
+server/src/db/migrations/meta/
+
+# Wrangler local dev state
+.wrangler/
+
+# Vite
+client/.vite/
+
+# PWA
+client/dist/sw.js
+client/dist/workbox-*.js

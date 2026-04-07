@@ -1,0 +1,24 @@
+name = "mealio-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mealio"
+database_id = "e0dec412-0471-46cd-bc86-b9b7070d6924"
+migrations_dir = "src/db/migrations"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "mealio-uploads"
+
+[durable_objects]
+bindings = [{ name = "FAMILY_ROOM", class_name = "FamilyRoom" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FamilyRoom"]
+
+[vars]
+APP_URL = "http://localhost:5173"
