@@ -220,6 +220,8 @@ listsRoutes.patch('/:id/items/:itemId', async (c) => {
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:updated', listId, itemId })
 
   if (result.data.checked === true) {
+    // Bought: make sure it's back in the pantry (re-creates it if it was swiped away)
+    await upsertItemHistory(db, familyId!, item.name, item.category, item.storeId)
     c.executionCtx.waitUntil(
       pushToFamily(db, familyId!, {
         title: 'Item checked off',

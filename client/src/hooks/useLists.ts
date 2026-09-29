@@ -99,6 +99,7 @@ export function useToggleItemMutation(listId: string) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(listId) })
       qc.invalidateQueries({ queryKey: queryKeys.lists.all() })
+      qc.invalidateQueries({ queryKey: ['pantry', 'history'] })
     },
   })
 }
