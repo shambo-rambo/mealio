@@ -28,30 +28,30 @@ export function TopBar({
 
   return (
     <header
-      className={`fixed top-0 w-full z-50 ${transparent ? 'bg-transparent' : 'bg-[#1a1a1a]'}`}
+      className={`fixed top-0 w-full z-50 ${transparent ? 'bg-transparent' : 'glass'}`}
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="flex justify-between items-center px-4 py-3 w-full">
+      <div className="flex justify-between items-center px-6 py-4 w-full">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {showBack && (
             <button
               onClick={handleBack}
-              className="material-symbols-outlined text-white hover:opacity-70 transition-opacity flex-shrink-0"
+              className="material-symbols-outlined text-primary hover:opacity-70 transition-opacity flex-shrink-0"
             >
               arrow_back
             </button>
           )}
-          <h1 className="font-headline text-base font-medium text-white tracking-wide truncate">{title}</h1>
+          <h1 className="font-headline font-bold text-lg text-primary truncate">{title}</h1>
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {right}
           {showAvatar && user && (
-            <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 bg-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-primary-container bg-secondary-container flex items-center justify-center flex-shrink-0">
               {user.avatar ? (
                 <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
               ) : (
-                <span className="font-sans text-xs font-medium text-white">
+                <span className="font-headline font-bold text-sm text-primary-container">
                   {user.name.charAt(0).toUpperCase()}
                 </span>
               )}
