@@ -350,6 +350,36 @@ function ItemDetailSheet({
   )
 }
 
+// ── Eye toggle: hide crossed-off / deselected rows (remembered per device) ─────
+
+function useHideDone(storageKey: string) {
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(storageKey) === '1' } catch { return false }
+  })
+  const toggle = () =>
+    setHidden((h) => {
+      try { localStorage.setItem(storageKey, h ? '0' : '1') } catch { /* private mode */ }
+      return !h
+    })
+  return [hidden, toggle] as const
+}
+
+function EyeToggle({ hidden, onToggle, label }: { hidden: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={hidden ? `Show ${label}` : `Hide ${label}`}
+      aria-pressed={hidden}
+      title={hidden ? `Show ${label}` : `Hide ${label}`}
+      className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+        hidden ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+      }`}
+    >
+      <span className="material-symbols-outlined text-[20px]">{hidden ? 'visibility_off' : 'visibility'}</span>
+    </button>
+  )
+}
+
 // ── Swipe-to-delete row ───────────────────────────────────────────────────────
 
 function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
@@ -575,6 +605,7 @@ function ShopPlanView({ listId }: { listId: string }) {
 
   const { data: entries = [], isLoading: planLoading } = useMealPlanQuery(weekStart, weekEnd)
   const addItem = useAddItemMutation(listId)
+  const [hideDeselected, toggleHideDeselected] = useHideDone('mealio-plan-hide-deselected')
 
   // Count how many times each unique recipe appears this week
   const recipeCounts: Record<string, number> = {}
@@ -713,6 +744,7 @@ function ShopPlanView({ listId }: { listId: string }) {
         <>
           {/* Select all + add button */}
           <div className="flex items-center gap-3">
+            <EyeToggle hidden={hideDeselected} onToggle={toggleHideDeselected} label="deselected items" />
             <button
               onClick={handleSelectAll}
               className="text-xs font-bold text-primary flex-shrink-0"
@@ -730,7 +762,7 @@ function ShopPlanView({ listId }: { listId: string }) {
 
           {/* Ingredient checklist */}
           <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-card divide-y divide-outline-variant/20">
-            {ingredients.map((ing) => {
+            {ingredients.filter((ing) => !hideDeselected || selectedKeys.has(ingKey(ing))).map((ing) => {
               const key = ingKey(ing)
               const selected = selectedKeys.has(key)
               const qtyDisplay = ing.totalQty != null
@@ -752,7 +784,7 @@ function ShopPlanView({ listId }: { listId: string }) {
                     {selected ? 'check_box' : 'check_box_outline_blank'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-on-surface">{ing.name}</p>
+                    <p className={`font-medium text-on-surface ${selected ? '' : 'line-through'}`}>{ing.name}</p>
                     <p className="text-xs text-on-surface-variant truncate mt-0.5">
                       {ing.sources.join(', ')}
                     </p>
@@ -808,6 +840,7 @@ export function ListDetailPage() {
     ? baseItems
     : baseItems.filter((i) => i.storeId === storeTab)
 
+  const [hideCompleted, toggleHideCompleted] = useHideDone('mealio-list-hide-completed')
   const uncheckedItems = filteredItems.filter((i) => !i.checked)
   const checkedItems = filteredItems.filter((i) => i.checked)
 
@@ -943,9 +976,13 @@ export function ListDetailPage() {
 
             {checkedItems.length > 0 && (
               <section>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50 mb-3 px-1">
-                  Completed
-                </p>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/70">
+                    Completed ({checkedItems.length})
+                  </p>
+                  <EyeToggle hidden={hideCompleted} onToggle={toggleHideCompleted} label="completed items" />
+                </div>
+                {!hideCompleted && (
                 <div className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-card divide-y divide-outline-variant/15 opacity-50">
                   {checkedItems.map((item) => (
                     <div key={item.id} className="flex items-center gap-3 px-4 py-3.5">
@@ -969,6 +1006,7 @@ export function ListDetailPage() {
                     </div>
                   ))}
                 </div>
+                )}
               </section>
             )}
           </>
