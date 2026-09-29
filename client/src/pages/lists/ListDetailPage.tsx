@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
@@ -779,6 +779,7 @@ function ShopPlanView({ listId }: { listId: string }) {
 
 export function ListDetailPage() {
   const { id: listId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { data: items, isLoading } = useItemsQuery(listId ?? null)
   const { data: lists = [] } = useListsQuery()
   const { data: stores = [] } = useStoresQuery()
@@ -845,7 +846,7 @@ export function ListDetailPage() {
 
   return (
     <div className="min-h-screen bg-surface pb-40">
-      <TopBar title={listName} showBack showAvatar />
+      <TopBar title={listName} showBack showAvatar onBack={() => navigate(lists.length > 1 ? '/shopping' : '/planner')} />
 
       {/* Fixed nav container — holds both rows */}
       <div className="fixed top-16 w-full z-40 bg-surface/80 backdrop-blur-sm">
