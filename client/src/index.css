@@ -58,20 +58,20 @@
 
 /* Bottom sheet backdrop */
 .sheet-backdrop {
-  background: rgba(26, 26, 26, 0.4);
+  background: rgba(24, 29, 24, 0.4);
   backdrop-filter: blur(2px);
 }
 
 /* Frosted glass — warm off-white tint for content overlays */
 .glass {
-  background: rgba(241, 239, 232, 0.92);
+  background: rgba(247, 251, 243, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
 
 /* Dark glass — ink tint for nav */
 .glass-dark {
-  background: rgba(26, 26, 26, 0.95);
+  background: rgba(224, 228, 220, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
