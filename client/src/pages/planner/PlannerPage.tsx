@@ -7,7 +7,7 @@ import { toast } from '../../components/shared/Toast'
 import {
   useMealPlanQuery, useAddMealMutation, useUpdateMealMutation, useDeleteMealMutation,
   useSuggestMealMutation,
-  groupByDate, getWeekDates, formatDate,
+  groupByDate, getWeekDates, formatDate, toLocalIso,
 } from '../../hooks/usePlanner'
 import { useRecipesQuery, useRecipeQuery } from '../../hooks/useRecipes'
 import { useListsQuery, useAddItemMutation } from '../../hooks/useLists'
@@ -391,7 +391,7 @@ function DayStrip({
   byDate: Record<string, MealPlanEntry[]>
   onSelect: (date: string) => void
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalIso()
   return (
     <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
       {dates.map((date) => {
@@ -1214,7 +1214,7 @@ function MonthView({
   onSelectDate: (date: string) => void
 }) {
   const cells = getMonthDates(year, month)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalIso()
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   return (
@@ -1335,7 +1335,7 @@ function WeeklyDozenSummary({
   weekDates: string[]
   categoryByDate: Record<string, Set<DailyDozenId>>
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalIso()
   // Only count days up to today (don't penalise future days)
   const pastDates = weekDates.filter((d) => d <= today)
   const totalDays = pastDates.length || 1
@@ -1395,7 +1395,7 @@ function WeeklyDozenSummary({
 // ── Main planner page ─────────────────────────────────────────────────────────
 
 export function PlannerPage() {
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = toLocalIso()
   const [view, setView] = useState<'week' | 'month'>('week')
   const [weekOffset, setWeekOffset] = useState(0)
   const [monthOffset, setMonthOffset] = useState(0)

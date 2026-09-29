@@ -1,3 +1,4 @@
+import { BrandMark } from '../components/shared/BrandMark'
 import { useEffect, useState } from 'react'
 
 type ServerStatus = 'loading' | 'ok' | 'error'
@@ -15,7 +16,7 @@ export function HomePage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-6 p-8">
       <div className="text-center">
-        <img src="/logo.png" alt="Cook" className="w-20 h-20 object-contain mx-auto mb-4" />
+        <BrandMark />
         <h1 className="text-3xl font-headline font-bold text-on-surface">Cook</h1>
         <p className="mt-2 text-gray-500 text-sm">Smart shopping and meal planning for families</p>
       </div>

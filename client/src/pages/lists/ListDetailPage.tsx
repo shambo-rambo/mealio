@@ -861,7 +861,7 @@ export function ListDetailPage() {
               <button
                 key={tab.id}
                 onClick={() => handleChangePrimary(tab.id)}
-                className={`flex-1 py-2 px-3 rounded-full text-sm font-bold transition-all ${
+                className={`flex-1 py-2 px-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all ${
                   primaryTab === tab.id
                     ? 'bg-primary text-on-primary shadow-sm'
                     : 'text-on-surface-variant hover:bg-surface-container'
@@ -913,7 +913,7 @@ export function ListDetailPage() {
       </div>
 
       {/* Main content — margin accounts for 1 or 2 nav rows */}
-      <main className={`px-6 space-y-8 ${showStoreNav ? 'mt-[196px]' : 'mt-[132px]'}`}>
+      <main className={`px-6 space-y-8 ${showStoreNav ? 'mt-[190px]' : 'mt-[136px]'}`}>
         {primaryTab === 'pantry' ? (
           <PantryView
             historyItems={pantryHistory}

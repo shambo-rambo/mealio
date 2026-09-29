@@ -24,6 +24,20 @@ function StarDisplay({ rating }: { rating: number | null }) {
   )
 }
 
+const PLACEHOLDER_TONES = [
+  'from-primary-container to-primary',
+  'from-[#4f8a5b] to-[#2d6a43]',
+  'from-[#8aa85f] to-[#5a7d3a]',
+  'from-[#c98f4a] to-[#a5692b]',
+  'from-[#5b8fa8] to-[#3a6a85]',
+  'from-[#a86b6b] to-[#853f3f]',
+]
+function placeholderTone(title: string) {
+  let h = 0
+  for (const ch of title) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return PLACEHOLDER_TONES[h % PLACEHOLDER_TONES.length]
+}
+
 export function RecipesPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
@@ -125,20 +139,19 @@ export function RecipesPage() {
             }
           />
         ) : (
-          <div className="grid grid-cols-2 gap-3 pb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
             {recipes.map((recipe) => (
               <button
                 key={recipe.id}
                 onClick={() => navigate(`/recipes/${recipe.id}`)}
-                className="bg-surface-container-lowest rounded-2xl shadow-card overflow-hidden text-left hover:shadow-card-md transition-shadow"
+                className="bg-surface-container-lowest rounded-2xl shadow-card overflow-hidden text-left hover:shadow-card-md active:scale-[0.98] transition-all"
               >
                 {recipe.pictureUrl ? (
                   <img src={recipe.pictureUrl} alt={recipe.title} className="w-full h-32 object-cover" />
                 ) : (
-                  <div className="w-full h-32 bg-surface-container flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[36px] text-on-surface-variant/40"
-                      style={{ fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 36" }}>
-                      restaurant_menu
+                  <div className={`w-full h-32 bg-gradient-to-br ${placeholderTone(recipe.title)} flex items-center justify-center`}>
+                    <span className="font-headline font-extrabold text-[44px] text-white/80 select-none">
+                      {recipe.title.trim().charAt(0).toUpperCase()}
                     </span>
                   </div>
                 )}

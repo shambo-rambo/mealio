@@ -1,3 +1,4 @@
+import { BrandMark } from '../../components/shared/BrandMark'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, getErrorMessage } from '../../lib/api'
@@ -29,11 +30,7 @@ export function RegisterPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col justify-center px-6 py-12">
       <div className="text-center mb-10">
-        <img
-          src="/logo.png"
-          alt="Cook"
-          className="w-20 h-20 object-contain mx-auto mb-5"
-        />
+        <BrandMark />
         <h1 className="font-headline text-2xl text-on-surface">Create your account</h1>
         <p className="text-on-surface-variant text-sm mt-1">Start planning meals with your family</p>
       </div>

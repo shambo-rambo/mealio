@@ -68,6 +68,13 @@ export function groupByDate(entries: MealPlanEntry[]): Record<string, MealPlanEn
   return grouped
 }
 
+/** YYYY-MM-DD in the user's local timezone (toISOString() would shift days in non-UTC zones). */
+export function toLocalIso(d: Date = new Date()): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 export function getWeekDates(weekOffset = 0): string[] {
   const today = new Date()
   // European week: Mon=0 … Sun=6. JS getDay(): Sun=0, Mon=1 … Sat=6
@@ -78,7 +85,7 @@ export function getWeekDates(weekOffset = 0): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return d.toISOString().slice(0, 10)
+    return toLocalIso(d)
   })
 }
 
@@ -89,6 +96,6 @@ export function formatDate(iso: string): { day: string; date: number; isToday: b
   return {
     day: days[d.getDay()],
     date: d.getDate(),
-    isToday: iso === today.toISOString().slice(0, 10),
+    isToday: iso === toLocalIso(today),
   }
 }
