@@ -4,18 +4,18 @@ import { useQueries } from '@tanstack/react-query'
 import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
 import { toast } from '../../components/shared/Toast'
+import { AddToListSheet } from '../../components/shared/AddToListSheet'
 import {
   useMealPlanQuery, useAddMealMutation, useUpdateMealMutation, useDeleteMealMutation,
   useSuggestMealMutation,
   groupByDate, getWeekDates, formatDate, toLocalIso,
 } from '../../hooks/usePlanner'
-import { useRecipesQuery, useRecipeQuery } from '../../hooks/useRecipes'
-import { useListsQuery, useAddItemMutation } from '../../hooks/useLists'
+import { useRecipesQuery } from '../../hooks/useRecipes'
 import { queryKeys } from '../../lib/queryKeys'
 import { api } from '../../lib/api'
 import { DAILY_DOZEN, classifyDay, type DailyDozenId } from '../../lib/dailyDozen'
 import { usePrefsStore } from '../../store/prefsStore'
-import type { MealPlanEntry, MealLabel, Ingredient, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult } from '../../types'
+import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult } from '../../types'
 
 const LABEL_COLORS: Record<MealLabel, string> = {
   breakfast: 'bg-amber-100 text-amber-800',
@@ -52,159 +52,8 @@ function MealChip({ entry }: { entry: MealPlanEntry }) {
 
 // ── Ingredient pull sheet ─────────────────────────────────────────────────────
 
-function IngredientPullSheet({
-  entry,
-  onClose,
-}: {
-  entry: MealPlanEntry | null
-  onClose: () => void
-}) {
-  const { data: recipe } = useRecipeQuery(entry?.recipeId ?? null)
-  const { data: lists = [] } = useListsQuery()
-  const [selectedListId, setSelectedListId] = useState<string>('')
-  const [servings, setServings] = useState(1)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [adding, setAdding] = useState(false)
-  const [lastEntryId, setLastEntryId] = useState<string | null>(null)
-
-  // Reset state when a new entry is opened
-  if (entry && entry.id !== lastEntryId) {
-    setLastEntryId(entry.id)
-    setServings(1)
-    setSelected(new Set())
-    setSelectedListId('')
-  }
-
-  // Auto-select when there is only one list
-  const effectiveListId = selectedListId || (lists.length === 1 ? lists[0].id : '')
-  const addItem = useAddItemMutation(effectiveListId)
-
-  const ingredients: Ingredient[] = recipe?.ingredients ?? []
-  const baseServings = recipe?.servings ?? 1
-
-  const toggle = (i: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(i)) next.delete(i); else next.add(i)
-      return next
-    })
-  }
-  const allSelected = selected.size === ingredients.length
-  const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(ingredients.map((_, i) => i)))
-
-  const handleAdd = async () => {
-    if (!effectiveListId || selected.size === 0) return
-    setAdding(true)
-    try {
-      const factor = servings / baseServings
-      await Promise.all(
-        [...selected].map((i) => {
-          const ing = ingredients[i]
-          const qty = ing.quantity != null ? Math.round(ing.quantity * factor * 10) / 10 : null
-          return addItem.mutateAsync({ name: ing.name, quantity: qty })
-        })
-      )
-      toast.success(`${selected.size} ingredient${selected.size === 1 ? '' : 's'} added`)
-      onClose()
-    } catch {
-      toast.error('Could not add ingredients')
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  // Pre-select all when ingredients load
-  if (ingredients.length > 0 && selected.size === 0 && !adding) {
-    setTimeout(() => setSelected(new Set(ingredients.map((_, i) => i))), 0)
-  }
-
-  if (!entry) return null
-
-  return (
-    <BottomSheet open={!!entry} onClose={onClose} title="Add to shopping list" size="lg">
-      <div className="space-y-4 pb-4">
-        {/* List selector */}
-        <div>
-          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Shopping list</p>
-          {lists.length === 0 ? (
-            <p className="text-sm text-on-surface-variant">No lists yet — create one first.</p>
-          ) : (
-            <div className="flex gap-2 flex-wrap">
-              {lists.map((l) => (
-                <button
-                  key={l.id}
-                  onClick={() => setSelectedListId(l.id)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
-                    effectiveListId === l.id ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                  }`}
-                >
-                  {l.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Servings scaler */}
-        <div className="flex items-center gap-3">
-          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest flex-1">Servings</p>
-          <button onClick={() => setServings(Math.max(1, servings - 1))}
-            className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center">
-            <span className="material-symbols-outlined text-[18px]">remove</span>
-          </button>
-          <span className="font-headline font-bold text-on-surface w-6 text-center">{servings}</span>
-          <button onClick={() => setServings(servings + 1)}
-            className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center">
-            <span className="material-symbols-outlined text-[18px]">add</span>
-          </button>
-        </div>
-
-        {/* Ingredient checklist */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-              Ingredients ({selected.size}/{ingredients.length})
-            </p>
-            <button onClick={toggleAll} className="text-xs text-primary font-bold">
-              {allSelected ? 'Deselect all' : 'Select all'}
-            </button>
-          </div>
-          <div className="space-y-1 max-h-52 overflow-y-auto no-scrollbar">
-            {ingredients.map((ing, i) => {
-              const factor = servings / baseServings
-              const qty = ing.quantity != null ? Math.round(ing.quantity * factor * 10) / 10 : null
-              return (
-                <button
-                  key={i}
-                  onClick={() => toggle(i)}
-                  className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors text-left ${
-                    selected.has(i) ? 'bg-primary/10' : 'bg-surface-container-low opacity-50'
-                  }`}
-                >
-                  <span className={`material-symbols-outlined text-[18px] ${selected.has(i) ? 'text-primary' : 'text-outline'}`}>
-                    {selected.has(i) ? 'check_box' : 'check_box_outline_blank'}
-                  </span>
-                  <span className="text-sm font-medium text-primary min-w-[4rem]">
-                    {qty != null ? `${qty % 1 === 0 ? qty : qty} ${ing.unit ?? ''}`.trim() : ing.unit ?? ''}
-                  </span>
-                  <span className="text-sm text-on-surface flex-1">{ing.name}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <button
-          onClick={handleAdd}
-          disabled={adding || selected.size === 0 || !effectiveListId}
-          className="w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold disabled:opacity-50"
-        >
-          {adding ? 'Adding…' : `Add ${selected.size} ingredient${selected.size === 1 ? '' : 's'}`}
-        </button>
-      </div>
-    </BottomSheet>
-  )
+function IngredientPullSheet({ entry, onClose }: { entry: MealPlanEntry | null; onClose: () => void }) {
+  return <AddToListSheet recipeId={entry?.recipeId ?? null} open={!!entry} onClose={onClose} />
 }
 
 // ── Delete scope modal ────────────────────────────────────────────────────────

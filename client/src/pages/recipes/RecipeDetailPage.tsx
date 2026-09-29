@@ -4,6 +4,7 @@ import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
 import { Skeleton } from '../../components/shared/Skeleton'
 import { toast } from '../../components/shared/Toast'
+import { AddToListSheet } from '../../components/shared/AddToListSheet'
 import { useRecipeQuery, useRateRecipeMutation, useDeleteRecipeMutation, scaleIngredients } from '../../hooks/useRecipes'
 import { DIETARY_TAG_LABELS, type DietaryTag } from '../../types'
 import { api } from '../../lib/api'
@@ -40,6 +41,7 @@ export function RecipeDetailPage() {
   const rateRecipe = useRateRecipeMutation(id!)
   const deleteRecipe = useDeleteRecipeMutation()
   const [servings, setServings] = useState<number | null>(null)
+  const [addToListOpen, setAddToListOpen] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -244,6 +246,14 @@ export function RecipeDetailPage() {
               Scale by ingredient
             </button>
 
+            <button
+              onClick={() => setAddToListOpen(true)}
+              className="mb-3 w-full flex items-center justify-center gap-2 py-3 rounded-full bg-secondary-container text-on-secondary-container font-headline font-bold text-sm active:scale-[0.99] transition-transform"
+            >
+              <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+              Add to shopping list
+            </button>
+
             <div className="bg-surface-container-lowest rounded-xl shadow-card overflow-hidden">
               {scaledIngredients.map((ing, i) => (
                 <div key={i} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-outline-variant/20' : ''}`}>
@@ -370,6 +380,13 @@ export function RecipeDetailPage() {
           </div>
         </div>
       </BottomSheet>
+
+      <AddToListSheet
+        recipeId={id ?? null}
+        open={addToListOpen}
+        onClose={() => setAddToListOpen(false)}
+        defaultServings={currentServings}
+      />
     </div>
   )
 }
