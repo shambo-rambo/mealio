@@ -148,6 +148,30 @@ export function useItemSuggestions(query: string) {
   })
 }
 
+export function usePantryHistoryQuery() {
+  return useQuery({
+    queryKey: ['pantry', 'history'],
+    queryFn: () =>
+      api.get<{ suggestions: ItemHistorySuggestion[] }>('/lists/suggestions?q=').then((r) => r.data.suggestions),
+    staleTime: 30_000,
+  })
+}
+
+export function useDeletePantryItemMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/lists/suggestions/${id}`),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['pantry', 'history'] })
+      const prev = qc.getQueryData<ItemHistorySuggestion[]>(['pantry', 'history'])
+      qc.setQueryData<ItemHistorySuggestion[]>(['pantry', 'history'], (old) => (old ?? []).filter((i) => i.id !== id))
+      return { prev }
+    },
+    onError: (_e, _id, ctx) => ctx?.prev && qc.setQueryData(['pantry', 'history'], ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['pantry', 'history'] }),
+  })
+}
+
 // ── Stores ────────────────────────────────────────────────────────────────
 
 import type { Store } from '../types'

@@ -3,7 +3,7 @@ import { eq, and, asc } from 'drizzle-orm'
 import { z } from 'zod'
 import { shoppingLists, shoppingItems, itemHistory } from '../db/schema.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { upsertItemHistory, getItemSuggestions, getDefaultStoreForItem } from '../lib/itemHistory.js'
+import { upsertItemHistory, getItemSuggestions, getDefaultStoreForItem, getDefaultCategoryForItem } from '../lib/itemHistory.js'
 import { broadcastToFamily } from '../lib/ws.js'
 import { pushToFamily } from '../lib/push.js'
 import { suggestItemCategory } from '../lib/ai.js'
@@ -57,6 +57,15 @@ listsRoutes.get('/suggestions', async (c) => {
   const query = c.req.query('q') ?? ''
   const suggestions = await getItemSuggestions(db, familyId, query)
   return c.json({ suggestions })
+})
+
+listsRoutes.delete('/suggestions/:id', async (c) => {
+  const db = c.get('db')
+  const { familyId } = c.get('user')
+  if (!familyId) return c.json({ error: { code: 'forbidden', message: 'No family' } }, 403)
+  await db.delete(itemHistory)
+    .where(and(eq(itemHistory.id, c.req.param('id')), eq(itemHistory.familyId, familyId)))
+  return c.json({ ok: true })
 })
 
 listsRoutes.get('/:id', async (c) => {
@@ -156,28 +165,28 @@ listsRoutes.post('/:id/items', async (c) => {
   }
 
   const defaultStoreId = rest.storeId ?? await getDefaultStoreForItem(db, familyId!, name)
+  // Use previously-learned category so repeat items are categorised immediately
+  const defaultCategory = rest.category ?? await getDefaultCategoryForItem(db, familyId!, name)
 
   const [item] = await db.insert(shoppingItems).values({
-    listId, name: name.trim(), quantity: quantity ?? null, storeId: defaultStoreId, createdBy: userId, ...rest,
+    listId, name: name.trim(), quantity: quantity ?? null, storeId: defaultStoreId, category: defaultCategory, createdBy: userId, ...rest,
   }).returning()
 
-  await upsertItemHistory(db, familyId!, name, rest.category ?? null, defaultStoreId)
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:added', listId, itemId: item.id })
 
-  // Fire-and-forget AI category suggestion (uses waitUntil so Worker stays alive)
-  if (!rest.category) {
-    const historyItem = await db.query.itemHistory.findFirst({
-      where: and(eq(itemHistory.familyId, familyId!), eq(itemHistory.nameLower, normalised)),
-    })
-    if (!historyItem?.category) {
-      c.executionCtx.waitUntil(
-        suggestItemCategory(name).then(async (cat) => {
-          await db.update(shoppingItems).set({ category: cat }).where(eq(shoppingItems.id, item.id))
-          await upsertItemHistory(db, familyId!, name, cat, defaultStoreId)
-          await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:updated', listId, itemId: item.id })
-        }).catch(() => {}),
-      )
-    }
+  // Fire-and-forget AI category suggestion for items with no known category
+  if (!defaultCategory) {
+    c.executionCtx.waitUntil(
+      suggestItemCategory(name, c.env.ANTHROPIC_API_KEY).then(async (cat) => {
+        await db.update(shoppingItems).set({ category: cat }).where(eq(shoppingItems.id, item.id))
+        // Save to history now that we have a real category
+        await upsertItemHistory(db, familyId!, name, cat, defaultStoreId)
+        await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:updated', listId, itemId: item.id })
+      }).catch(() => {}),
+    )
+  } else {
+    // Category already known — persist usage count + store preference
+    await upsertItemHistory(db, familyId!, name, defaultCategory, defaultStoreId)
   }
 
   return c.json({ item }, 201)
