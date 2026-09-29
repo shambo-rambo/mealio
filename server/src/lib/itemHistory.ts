@@ -43,3 +43,11 @@ export async function getDefaultStoreForItem(db: AppDB, familyId: string, name: 
   })
   return item?.storeId ?? null
 }
+
+export async function getDefaultCategoryForItem(db: AppDB, familyId: string, name: string) {
+  const nameLower = name.toLowerCase().trim()
+  const item = await db.query.itemHistory.findFirst({
+    where: and(eq(itemHistory.familyId, familyId), eq(itemHistory.nameLower, nameLower)),
+  })
+  return item?.category ?? null
+}

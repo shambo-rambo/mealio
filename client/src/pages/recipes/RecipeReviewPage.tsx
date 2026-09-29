@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { toast } from '../../components/shared/Toast'
 import { useSaveRecipeMutation } from '../../hooks/useRecipes'
-import type { RecipeImportResult } from '../../types'
+import { useAddMealMutation } from '../../hooks/usePlanner'
+import { getErrorMessage } from '../../lib/api'
+import type { RecipeImportResult, PendingMealPlan } from '../../types'
 import { CATEGORIES, DIETARY_TAG_LABELS, type DietaryTag } from '../../types'
 
 const DIET_TAGS: DietaryTag[] = ['vegetarian', 'vegan', 'gluten_free', 'dairy_free', 'nut_free']
@@ -12,11 +14,14 @@ export function RecipeReviewPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const importResult = location.state?.importResult as RecipeImportResult | null
+  const pendingMealPlan = location.state?.pendingMealPlan as PendingMealPlan | null
   const saveRecipe = useSaveRecipeMutation()
+  const addMeal = useAddMealMutation()
 
   const [form, setForm] = useState({
     title: importResult?.title ?? '',
     sourceUrl: importResult?.sourceUrl ?? '',
+    pictureUrl: importResult?.thumbnailUrl ?? null as string | null,
     servings: importResult?.servings ?? 4,
     prepTime: importResult?.prepTime ?? null as number | null,
     cookTime: importResult?.cookTime ?? null as number | null,
@@ -46,18 +51,44 @@ export function RecipeReviewPage() {
         dietaryTags: form.dietaryTags,
         nutrition: Object.values(form.nutrition).some((v) => v != null) ? form.nutrition : null,
       } as any)
+      if (pendingMealPlan) {
+        await addMeal.mutateAsync({
+          date: pendingMealPlan.date,
+          mealLabel: pendingMealPlan.mealLabel,
+          recipeId: recipe.id,
+        })
+      }
       navigate(`/recipes/${recipe.id}`, { replace: true })
-      toast.success('Recipe saved!')
-    } catch {
-      toast.error('Could not save recipe')
+      toast.success(pendingMealPlan ? 'Recipe saved and added to plan!' : 'Recipe saved!')
+    } catch (err) {
+      toast.error(getErrorMessage(err))
     }
   }
 
   return (
-    <div className="min-h-screen bg-surface pb-10">
+    <div className="min-h-screen bg-surface pb-28">
       <TopBar title={importResult ? 'Review import' : 'New recipe'} showBack />
 
       <div className="pt-20 px-6 mt-4 space-y-6">
+        {/* Thumbnail */}
+        {form.pictureUrl && (
+          <section className="relative rounded-2xl overflow-hidden">
+            <img
+              src={form.pictureUrl}
+              alt="Recipe thumbnail"
+              className="w-full h-48 object-cover"
+              onError={() => setForm((f) => ({ ...f, pictureUrl: null }))}
+            />
+            <button
+              onClick={() => setForm((f) => ({ ...f, pictureUrl: null }))}
+              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
+              aria-label="Remove thumbnail"
+            >
+              <span className="material-symbols-outlined text-white text-[18px]">close</span>
+            </button>
+          </section>
+        )}
+
         {/* Basics */}
         <section className="space-y-4">
           <h2 className="font-headline font-bold text-xs text-on-surface-variant uppercase tracking-widest">Basics</h2>

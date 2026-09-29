@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { EmptyState } from '../../components/shared/EmptyState'
 import { BottomSheet } from '../../components/shared/BottomSheet'
@@ -15,6 +15,10 @@ export function ListsPage() {
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  if (!isLoading && lists && lists.length === 1) {
+    return <Navigate to={`/shopping/${lists[0].id}`} replace />
+  }
 
   const handleCreate = async () => {
     if (!newName.trim()) return

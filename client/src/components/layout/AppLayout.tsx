@@ -19,7 +19,9 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-surface">
-      <Outlet />
+      <main>
+        <Outlet />
+      </main>
       <BottomNav />
       <Toaster />
     </div>

@@ -10,9 +10,12 @@ export function expandRecurrenceRule(
   limit = 365,
 ): string[] {
   const dates: string[] = []
-  const start = new Date(`${startDate}T00:00:00`)
+  // Parse as UTC midnight so toISOString() always returns the expected date
+  // regardless of the server's local timezone. Using local-time parsing causes
+  // off-by-one duplicates in timezones east of UTC (e.g. Australia/Sydney).
+  const start = new Date(`${startDate}T00:00:00Z`)
   const cursor = new Date(start)
-  cursor.setDate(cursor.getDate() + 1) // skip the original entry
+  cursor.setUTCDate(cursor.getUTCDate() + 1) // skip the original entry
 
   while (dates.length < limit) {
     const iso = cursor.toISOString().slice(0, 10)
@@ -20,15 +23,15 @@ export function expandRecurrenceRule(
     if (rule.freq === 'daily') {
       dates.push(iso)
     } else if (rule.freq === 'weekly') {
-      if (cursor.getDay() === start.getDay()) dates.push(iso)
+      if (cursor.getUTCDay() === start.getUTCDay()) dates.push(iso)
     } else if (rule.freq === 'fortnightly') {
       const diffDays = Math.round((cursor.getTime() - start.getTime()) / 86_400_000)
       if (diffDays % 14 === 0) dates.push(iso)
     } else if (rule.freq === 'days' && rule.days) {
-      if (rule.days.includes(cursor.getDay())) dates.push(iso)
+      if (rule.days.includes(cursor.getUTCDay())) dates.push(iso)
     }
 
-    cursor.setDate(cursor.getDate() + 1)
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
 
     // Stop after 1 year
     const diffDays = Math.round((cursor.getTime() - start.getTime()) / 86_400_000)

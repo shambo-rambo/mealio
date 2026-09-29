@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
@@ -11,7 +11,7 @@ import { api } from '../../lib/api'
 function StarRating({ current, onRate }: { current: number | null; onRate: (r: number) => void }) {
   const [hover, setHover] = useState(0)
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((s) => {
         const filled = s <= (hover || current || 0)
         return (
@@ -20,10 +20,10 @@ function StarRating({ current, onRate }: { current: number | null; onRate: (r: n
             onMouseEnter={() => setHover(s)}
             onMouseLeave={() => setHover(0)}
             onClick={() => onRate(s)}
-            className="p-0.5"
+            className="p-0"
           >
-            <span className="material-symbols-outlined text-[22px] text-yellow-400"
-              style={{ fontVariationSettings: filled ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" : "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}>
+            <span className="material-symbols-outlined text-[16px] text-yellow-400"
+              style={{ fontVariationSettings: filled ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" : "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20" }}>
               star
             </span>
           </button>
@@ -36,7 +36,7 @@ function StarRating({ current, onRate }: { current: number | null; onRate: (r: n
 export function RecipeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: recipe, isLoading } = useRecipeQuery(id ?? null)
+  const { data: recipe, isLoading, isError } = useRecipeQuery(id ?? null)
   const rateRecipe = useRateRecipeMutation(id!)
   const deleteRecipe = useDeleteRecipeMutation()
   const [servings, setServings] = useState<number | null>(null)
@@ -45,6 +45,10 @@ export function RecipeDetailPage() {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
   const [scaleByIngredient, setScaleByIngredient] = useState(false)
+
+  useEffect(() => {
+    if (isError) navigate('/recipes', { replace: true })
+  }, [isError, navigate])
 
   const currentServings = servings ?? recipe?.servings ?? 1
   const scaledIngredients = recipe?.ingredients
@@ -83,6 +87,7 @@ export function RecipeDetailPage() {
   }
 
   const handleDelete = async () => {
+    setShowDelete(false)
     try {
       await deleteRecipe.mutateAsync(id!)
       navigate('/recipes', { replace: true })
@@ -104,6 +109,8 @@ export function RecipeDetailPage() {
       </div>
     )
   }
+
+  if (isError) return null
 
   if (!recipe) return null
 
@@ -156,7 +163,7 @@ export function RecipeDetailPage() {
           <div>
             <h1 className="font-headline font-bold text-2xl text-on-surface">{recipe.title}</h1>
 
-            {/* Time chips */}
+            {/* Time chips + dietary tags on same row */}
             <div className="flex flex-wrap gap-2 mt-3">
               {recipe.prepTime && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-xs font-medium text-on-surface-variant">
@@ -176,29 +183,32 @@ export function RecipeDetailPage() {
                   Made {recipe.preparedCount}×
                 </span>
               )}
+              {recipe.dietaryTags && recipe.dietaryTags.map((tag) => (
+                <span key={tag} className={`px-2.5 py-1.5 rounded-full text-xs font-bold ${tagColors[tag as DietaryTag]}`}>
+                  {DIETARY_TAG_LABELS[tag as DietaryTag]}
+                </span>
+              ))}
             </div>
 
-            {/* Dietary tags */}
-            {recipe.dietaryTags && recipe.dietaryTags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {recipe.dietaryTags.map((tag) => (
-                  <span key={tag} className={`px-2.5 py-1 rounded-full text-xs font-bold ${tagColors[tag as DietaryTag]}`}>
-                    {DIETARY_TAG_LABELS[tag as DietaryTag]}
-                  </span>
-                ))}
+            {/* Rating + Start cook mode — compact row */}
+            <div className="flex items-center justify-between mt-4 gap-3">
+              <div className="flex items-center gap-2">
+                <StarRating current={recipe.userRating ?? null} onRate={handleRate} />
+                {recipe.averageRating && (
+                  <span className="text-xs text-on-surface-variant">{recipe.averageRating.toFixed(1)}</span>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* Rating */}
-          <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-card">
-            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">Your rating</p>
-            <StarRating current={recipe.userRating ?? null} onRate={handleRate} />
-            {recipe.averageRating && (
-              <p className="text-xs text-on-surface-variant mt-2">
-                Family average: {recipe.averageRating.toFixed(1)} / 5
-              </p>
-            )}
+              <button
+                onClick={() => navigate(`/recipes/${id}/cook`)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary font-headline font-bold text-sm shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]"
+                  style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
+                  cooking
+                </span>
+                Start cook mode
+              </button>
+            </div>
           </div>
 
           {/* Servings scaler */}
@@ -322,17 +332,6 @@ export function RecipeDetailPage() {
             </div>
           )}
 
-          {/* Cook mode */}
-          <button
-            onClick={() => navigate(`/recipes/${id}/cook`)}
-            className="w-full py-4 rounded-full bg-primary text-on-primary font-headline font-bold text-base shadow-fab flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined"
-              style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
-              cooking
-            </span>
-            Start cook mode
-          </button>
         </div>
       </div>
 

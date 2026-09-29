@@ -153,6 +153,7 @@ export interface MealPlanEntry {
 
 export interface RecipeImportResult {
   title: string
+  description?: string | null
   sourceUrl: string | null
   servings: number
   prepTime: number | null
@@ -165,6 +166,7 @@ export interface RecipeImportResult {
   }>
   steps: Array<{ instruction: string }>
   dietaryTags: DietaryTag[]
+  thumbnailUrl?: string | null
   nutrition: {
     calories: number | null
     protein: number | null
@@ -209,6 +211,25 @@ export const CATEGORIES = [
 ] as const
 
 export type Category = (typeof CATEGORIES)[number]
+
+export interface PendingMealPlan {
+  date: string
+  mealLabel: MealLabel
+}
+
+export interface SuggestMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export type SuggestTurnRequest = {
+  mealLabel: MealLabel
+  messages: SuggestMessage[]
+}
+
+export type SuggestTurnResponse =
+  | { type: 'question'; text: string }
+  | { type: 'recipe'; importResult: RecipeImportResult }
 
 export const DIETARY_TAG_LABELS: Record<DietaryTag, string> = {
   vegetarian: 'Vegetarian',

@@ -141,10 +141,10 @@ export function PublicRecipePage() {
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-surface via-surface/90 to-transparent">
         <button
           onClick={handleImport}
-          className="w-full py-4 rounded-full bg-primary text-on-primary font-headline font-bold text-base shadow-fab flex items-center justify-center gap-2"
+          className="w-full py-4 rounded bg-primary text-on-primary font-sans font-medium text-sm tracking-wide shadow-fab flex items-center justify-center gap-2"
         >
           <span className="material-symbols-outlined text-[20px]">add_circle</span>
-          Import to Mealio
+          Import to Cook
         </button>
         {!authToken && (
           <p className="text-center text-xs text-on-surface-variant mt-2">You'll need to sign in first</p>

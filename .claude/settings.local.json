@@ -28,7 +28,20 @@
       "Bash(npx wrangler:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(git remote:*)",
+      "Bash(git push:*)",
+      "Skill(update-config)",
+      "Bash(npm list:*)",
+      "Bash(npm info:*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('exports', d.get\\('main', 'no-main'\\)\\), indent=2\\)\\)\")",
+      "Bash(echo \"exit: $?\")",
+      "WebSearch",
+      "Bash(wrangler --version)",
+      "Bash(VITE_API_URL=https://mealio-api.simon-hamblin.workers.dev npm run build)",
+      "Bash(VITE_API_URL=https://mealio-api.simon-hamblin.workers.dev npm run build --workspace=client)",
+      "WebFetch(domain:www.googleapis.com)",
+      "WebFetch(domain:googlechrome.github.io)"
     ]
   }
 }

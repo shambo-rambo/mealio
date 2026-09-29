@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { toast } from '../../components/shared/Toast'
 import { useAuthStore } from '../../store/authStore'
+import { usePrefsStore } from '../../store/prefsStore'
 import { api } from '../../lib/api'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 
@@ -17,6 +18,7 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
   const { permission, subscribing, subscribe, unsubscribe } = usePushNotifications()
+  const { dailyDozenEnabled, setDailyDozenEnabled } = usePrefsStore()
 
   const handleSaveName = async () => {
     if (!name.trim() || name.trim() === user?.name) return
@@ -150,9 +152,36 @@ export function SettingsPage() {
           </div>
         )}
 
+        {/* Meal planner */}
+        <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card space-y-4">
+          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Meal planner</p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-on-surface">Daily Dozen tracking</p>
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                Show Dr Greger's Daily Dozen food-group tracker on each day.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={dailyDozenEnabled}
+              onClick={() => setDailyDozenEnabled(!dailyDozenEnabled)}
+              className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                dailyDozenEnabled ? 'bg-primary' : 'bg-outline-variant'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                  dailyDozenEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
         {/* App info */}
         <div className="text-center text-xs text-on-surface-variant py-4">
-          <p className="font-headline font-bold text-on-surface mb-1">Mealio</p>
+          <p className="font-headline font-bold text-on-surface mb-1">Cook</p>
           <p>Version 1.0.0</p>
         </div>
       </div>

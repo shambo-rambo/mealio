@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute, AppLayout } from './components/layout/AppLayout'
 import { useAuthStore } from './store/authStore'
 import { useRealtime } from './hooks/useRealtime'
+import { InstallBanner } from './components/shared/InstallBanner'
 
 // Auth
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })))
@@ -29,6 +30,9 @@ const StoresPage = lazy(() => import('./pages/stores/StoresPage').then((m) => ({
 const QuickAddPage = lazy(() => import('./pages/lists/QuickAddPage').then((m) => ({ default: m.QuickAddPage })))
 const PublicRecipePage = lazy(() => import('./pages/recipes/PublicRecipePage').then((m) => ({ default: m.PublicRecipePage })))
 const JoinPage = lazy(() => import('./pages/family/JoinPage').then((m) => ({ default: m.JoinPage })))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
+const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage').then((m) => ({ default: m.DataDeletionPage })))
+const ShareTargetPage = lazy(() => import('./pages/recipes/ShareTargetPage').then((m) => ({ default: m.ShareTargetPage })))
 
 function PageLoader() {
   return (
@@ -43,6 +47,8 @@ export default function App() {
   useRealtime(token)
 
   return (
+    <>
+    <InstallBanner />
     <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* Public routes */}
@@ -51,6 +57,9 @@ export default function App() {
         <Route path="/join" element={<JoinPage />} />
         <Route path="/list/:id/quick-add" element={<QuickAddPage />} />
         <Route path="/r/:token" element={<PublicRecipePage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/data-deletion" element={<DataDeletionPage />} />
+        <Route path="/share-target" element={<ShareTargetPage />} />
 
         {/* Family setup — authenticated but no family yet */}
         <Route element={<ProtectedRoute />}>
@@ -84,5 +93,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/planner" replace />} />
       </Routes>
     </Suspense>
+    </>
   )
 }

@@ -18,7 +18,9 @@ bindings = [{ name = "FAMILY_ROOM", class_name = "FamilyRoom" }]
 
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["FamilyRoom"]
+new_classes = ["FamilyRoom"]
 
 [vars]
-APP_URL = "http://localhost:5173"
+APP_URL = "https://mealio.pages.dev"
+# YOUTUBE_API_KEY is set as a secret — see server/.dev.vars for local dev
+# INSTAGRAM_TOKEN is set as a secret — format: "{APP_ID}|{APP_SECRET}" from a Meta app with instagram_oembed permission

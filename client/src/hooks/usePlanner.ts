@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import type { MealPlanEntry } from '../types'
+import type { MealPlanEntry, SuggestTurnRequest, SuggestTurnResponse } from '../types'
 
 export function useMealPlanQuery(start: string, end: string) {
   return useQuery({
@@ -46,6 +46,13 @@ export function useDeleteMealMutation() {
   })
 }
 
+export function useSuggestMealMutation() {
+  return useMutation({
+    mutationFn: (req: SuggestTurnRequest) =>
+      api.post<SuggestTurnResponse>('/meal-plan/suggest', req).then((r) => r.data),
+  })
+}
+
 // Group entries by date
 export function groupByDate(entries: MealPlanEntry[]): Record<string, MealPlanEntry[]> {
   const grouped: Record<string, MealPlanEntry[]> = {}
@@ -63,8 +70,11 @@ export function groupByDate(entries: MealPlanEntry[]): Record<string, MealPlanEn
 
 export function getWeekDates(weekOffset = 0): string[] {
   const today = new Date()
+  // European week: Mon=0 … Sun=6. JS getDay(): Sun=0, Mon=1 … Sat=6
+  const dayOfWeek = today.getDay()
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
   const monday = new Date(today)
-  monday.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7)
+  monday.setDate(today.getDate() - daysFromMonday + weekOffset * 7)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)

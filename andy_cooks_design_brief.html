@@ -1,0 +1,379 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.brief{max-width:680px;padding:0 0 2rem}
+.section{margin-bottom:2rem;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:2rem}
+.section:last-child{border-bottom:none}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-tertiary);font-weight:500;margin-bottom:.5rem}
+.section-title{font-size:18px;font-weight:500;color:var(--color-text-primary);margin-bottom:1rem}
+.sub-title{font-size:13px;font-weight:500;color:var(--color-text-secondary);margin-bottom:.4rem;margin-top:.8rem}
+.body{font-size:14px;color:var(--color-text-secondary);line-height:1.6}
+/* colour palette */
+.swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:.5rem}
+.swatch{width:52px;text-align:center}
+.swatch-block{height:36px;border-radius:6px;border:0.5px solid rgba(0,0,0,.08)}
+.swatch-name{font-size:10px;color:var(--color-text-tertiary);margin-top:4px}
+.swatch-hex{font-size:9px;color:var(--color-text-tertiary)}
+/* type specimens */
+.type-row{display:flex;align-items:baseline;gap:16px;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.type-row:last-child{border-bottom:none}
+.type-meta{font-size:11px;color:var(--color-text-tertiary);min-width:140px;flex-shrink:0}
+/* component chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:.5rem}
+.chip{font-size:12px;padding:4px 10px;border-radius:20px;border:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary);background:var(--color-background-secondary)}
+/* nav mockup */
+.nav-mock{background:#1a1a1a;border-radius:8px;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;margin-top:.75rem}
+.nav-logo{color:#fff;font-size:14px;font-weight:500;letter-spacing:.04em}
+.nav-links{display:flex;gap:20px}
+.nav-link{color:rgba(255,255,255,.75);font-size:12px}
+.nav-icons{display:flex;gap:12px}
+.nav-icon{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.25)}
+/* card mock */
+.card-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:.75rem}
+.card-mock{border-radius:6px;overflow:hidden;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary)}
+.card-img{height:90px;background:#d0ccc5;position:relative}
+.card-badge{position:absolute;top:8px;left:8px;background:#1a1a1a;color:#fff;font-size:9px;padding:2px 6px;border-radius:3px;letter-spacing:.04em}
+.card-body{padding:8px}
+.card-title{font-size:11px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px;line-height:1.3}
+.card-cta{font-size:10px;color:var(--color-text-secondary)}
+/* recipe page mock */
+.recipe-mock{border:0.5px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden;margin-top:.75rem}
+.recipe-hero{height:120px;background:#b8b0a5;position:relative;display:flex;align-items:flex-end}
+.recipe-hero-inner{background:linear-gradient(transparent,rgba(0,0,0,.5));width:100%;padding:12px 16px}
+.recipe-hero-tags{display:flex;gap:6px;margin-bottom:4px}
+.recipe-tag{font-size:9px;color:rgba(255,255,255,.7)}
+.recipe-h1{color:#fff;font-size:14px;font-weight:500}
+.recipe-meta-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--color-border-tertiary)}
+.recipe-meta-cell{background:var(--color-background-secondary);padding:8px 10px}
+.recipe-meta-label{font-size:9px;color:var(--color-text-tertiary);margin-bottom:2px}
+.recipe-meta-val{font-size:11px;font-weight:500;color:var(--color-text-primary)}
+.recipe-content{padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.recipe-ingredients{font-size:11px;color:var(--color-text-secondary)}
+.recipe-ingredient-item{padding:3px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.recipe-directions{font-size:11px;color:var(--color-text-secondary)}
+.recipe-step{display:flex;gap:8px;padding:4px 0;align-items:flex-start}
+.step-num{width:16px;height:16px;border-radius:50%;background:#1a1a1a;color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+/* footer mock */
+.footer-mock{background:#1a1a1a;border-radius:8px;padding:16px 20px;margin-top:.75rem;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.footer-headline{color:#fff;font-size:13px;font-weight:500;margin-bottom:8px}
+.footer-links{display:flex;flex-direction:column;gap:4px}
+.footer-link{color:rgba(255,255,255,.5);font-size:11px}
+.footer-tagline{color:rgba(255,255,255,.7);font-size:12px;font-style:italic}
+/* spacing scale */
+.spacing-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.spacing-block{background:var(--color-background-info);height:14px;border-radius:2px;min-width:4px}
+.spacing-label{font-size:12px;color:var(--color-text-secondary)}
+/* tone */
+.tone-table{width:100%;font-size:13px;border-collapse:collapse;margin-top:.5rem}
+.tone-table td{padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary)}
+.tone-table td:first-child{color:var(--color-text-primary);font-weight:500;width:40%}
+.tone-table tr:last-child td{border-bottom:none}
+/* tab nav */
+.tabs{display:flex;gap:4px;margin-bottom:1.5rem;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:0}
+.tab{font-size:13px;padding:6px 12px;cursor:pointer;border-radius:6px 6px 0 0;color:var(--color-text-secondary);background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary);font-weight:500}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+</style>
+
+<div class="brief">
+  <div style="margin-bottom:1.5rem">
+    <div class="label">Design brief</div>
+    <div style="font-size:22px;font-weight:500;color:var(--color-text-primary)">Andy Cooks — Brand & UI System</div>
+    <div class="body" style="margin-top:.4rem">Based on andy-cooks.com — a Shopify-hosted creator brand site. Use this brief to mirror the aesthetic in your recipe import PWA.</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('colours')">Colours</button>
+    <button class="tab" onclick="switchTab('type')">Typography</button>
+    <button class="tab" onclick="switchTab('components')">Components</button>
+    <button class="tab" onclick="switchTab('layout')">Layout</button>
+    <button class="tab" onclick="switchTab('tone')">Tone & voice</button>
+  </div>
+
+  <!-- COLOURS -->
+  <div id="tab-colours" class="tab-pane active">
+    <div class="section">
+      <div class="section-title">Colour system</div>
+      <div class="sub-title">Primary palette</div>
+      <div class="body">Two-mode design — dark backgrounds for navigation and hero, pure white for content. Almost entirely monochromatic with warm off-white surfaces instead of cold greys.</div>
+      <div class="swatches" style="margin-top:.75rem">
+        <div class="swatch"><div class="swatch-block" style="background:#1a1a1a"></div><div class="swatch-name">Ink</div><div class="swatch-hex">#1a1a1a</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#2c2c2a"></div><div class="swatch-name">Dark grey</div><div class="swatch-hex">#2c2c2a</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#5f5e5a"></div><div class="swatch-name">Mid grey</div><div class="swatch-hex">#5f5e5a</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#888780"></div><div class="swatch-name">Cool grey</div><div class="swatch-hex">#888780</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#d3d1c7"></div><div class="swatch-name">Stone</div><div class="swatch-hex">#d3d1c7</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#f1efe8"></div><div class="swatch-name">Off-white</div><div class="swatch-hex">#f1efe8</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#ffffff;border:0.5px solid #ddd"></div><div class="swatch-name">White</div><div class="swatch-hex">#ffffff</div></div>
+      </div>
+      <div class="sub-title" style="margin-top:1.25rem">Accent — used very sparingly</div>
+      <div class="swatches">
+        <div class="swatch"><div class="swatch-block" style="background:#c8a96e"></div><div class="swatch-name">Warm gold</div><div class="swatch-hex">#c8a96e</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#e8593c"></div><div class="swatch-name">Food red</div><div class="swatch-hex">#e8593c</div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#3d7a5c"></div><div class="swatch-name">Herb green</div><div class="swatch-hex">#3d7a5c</div></div>
+      </div>
+      <div class="body" style="margin-top:.75rem">The warm gold accent appears on star ratings and CTAs. The food red and herb green are photography-derived — don't hard-code them into UI; instead, let photography carry the colour. Keep UI chrome monochromatic.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Surface rules</div>
+      <div class="body">Follow this strict surface hierarchy across your PWA:</div>
+      <table class="tone-table" style="margin-top:.75rem">
+        <tr><td>Nav / app bar</td><td>#1a1a1a — dark ink. White text.</td></tr>
+        <tr><td>Page background</td><td>#ffffff or #f1efe8 off-white. Alternates per section.</td></tr>
+        <tr><td>Cards</td><td>#ffffff surface, 0.5px stone border, subtle box-shadow (1px 2px 6px rgba(0,0,0,.05)).</td></tr>
+        <tr><td>Input fields</td><td>#f1efe8 fill, 1px #d3d1c7 border. No radius on mobile — uses 8px on desktop.</td></tr>
+        <tr><td>Badges / pills</td><td>#1a1a1a background, white text. "New" badge on recipe cards.</td></tr>
+        <tr><td>Footer</td><td>#1a1a1a full-bleed. White/muted text.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- TYPOGRAPHY -->
+  <div id="tab-type" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Type scale</div>
+      <div class="body">The site uses a classic serif/sans pairing. Display headings use a high-contrast serif — likely <strong>Canela</strong> or <strong>Freight Display</strong>. Body copy is clean sans-serif — likely <strong>Neue Haas Grotesk</strong> or system-safe <strong>Inter</strong>. Replicate with: heading → Georgia/Times fallback, body → Inter or system-ui.</div>
+
+      <div style="margin-top:1rem">
+        <div class="type-row">
+          <div class="type-meta">Hero H1 · 56–72px · serif · regular</div>
+          <div style="font-size:28px;font-family:Georgia,serif;color:var(--color-text-primary)">Good food</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">Page H1 · 32–40px · serif · regular</div>
+          <div style="font-size:22px;font-family:Georgia,serif;color:var(--color-text-primary)">Carbonara</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">Section H2 · 24px · sans · 500</div>
+          <div style="font-size:18px;font-weight:500;color:var(--color-text-primary)">Latest recipes</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">Card title · 16px · sans · 500</div>
+          <div style="font-size:14px;font-weight:500;color:var(--color-text-primary)">Leek and Lemon Fish Cakes</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">Body · 16px · sans · 400 · 1.7 line height</div>
+          <div style="font-size:13px;color:var(--color-text-secondary);max-width:280px;line-height:1.7">The real Roman carbonara made with guanciale, egg yolks and pecorino. No cream.</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">Meta label · 12px · sans · 400 · uppercase · tracked</div>
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-tertiary)">Prep time</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">CTA link · 14px · sans · 400</div>
+          <div style="font-size:13px;color:var(--color-text-primary)">See recipe →</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">Nav link · 14px · sans · 400</div>
+          <div style="font-size:13px;color:var(--color-text-secondary)">Recipes</div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Font stack for your PWA</div>
+      <div class="body">Use these CSS font families directly:</div>
+      <div style="background:var(--color-background-secondary);border-radius:8px;padding:12px 14px;margin-top:.75rem;font-family:var(--font-mono);font-size:12px;color:var(--color-text-primary);line-height:2">
+        --font-display: 'Playfair Display', Georgia, serif;<br>
+        --font-body: 'Inter', system-ui, sans-serif;<br>
+        --font-mono: 'JetBrains Mono', monospace;
+      </div>
+      <div class="body" style="margin-top:.75rem">Playfair Display is freely available on Google Fonts and is the closest free match to Andy's display serif. Inter handles all UI chrome. Both load well on mobile.</div>
+    </div>
+  </div>
+
+  <!-- COMPONENTS -->
+  <div id="tab-components" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Navigation bar</div>
+      <div class="nav-mock">
+        <div class="nav-logo">ANDY COOKS</div>
+        <div class="nav-links">
+          <span class="nav-link">Shop</span>
+          <span class="nav-link">Recipes</span>
+          <span class="nav-link">YouTube</span>
+        </div>
+        <div class="nav-icons">
+          <div class="nav-icon"></div>
+          <div class="nav-icon"></div>
+          <div class="nav-icon"></div>
+        </div>
+      </div>
+      <div class="body" style="margin-top:.75rem">Dark ink background, white wordmark (all-caps, tracked). Three nav items centred or right. Icon row: account, search, hamburger (mobile), cart. Sticky on scroll. On light pages the logo switches to dark wordmark — implement via scroll position or a CSS class toggle. For your PWA: replace nav icons with search, user profile, and a back arrow where needed.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Recipe card</div>
+      <div class="card-grid">
+        <div class="card-mock">
+          <div class="card-img" style="background:#c4bdb5"><div class="card-badge">New Recipe</div></div>
+          <div class="card-body"><div class="card-title">Grilled Chicken Pasta Salad</div><div class="card-cta">See recipe →</div></div>
+        </div>
+        <div class="card-mock">
+          <div class="card-img" style="background:#b0a99f"><div class="card-badge">New Recipe</div></div>
+          <div class="card-body"><div class="card-title">Carbonara</div><div class="card-cta">See recipe →</div></div>
+        </div>
+        <div class="card-mock">
+          <div class="card-img" style="background:#c9c3ba"></div>
+          <div class="card-body"><div class="card-title">Leek and Lemon Fish Cakes</div><div class="card-cta">See recipe →</div></div>
+        </div>
+      </div>
+      <div class="body" style="margin-top:.75rem">Image fills the card top (aspect ratio ~3:4 on mobile, ~1:1 on grid). "New Recipe" badge: #1a1a1a pill, white text, 8px padding, top-left absolute. Title below in 14–16px sans 500. CTA as plain text link with → arrow. No border-radius on image corners inside the card — let the card's radius clip it. No box shadow on cards in listing view — shadow only on hover.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Recipe detail page</div>
+      <div class="recipe-mock">
+        <div class="recipe-hero">
+          <div class="recipe-hero-inner">
+            <div class="recipe-hero-tags">
+              <span class="recipe-tag">Dinner ·</span><span class="recipe-tag">Pasta ·</span><span class="recipe-tag">Quick ·</span>
+            </div>
+            <div class="recipe-h1">Carbonara</div>
+          </div>
+        </div>
+        <div class="recipe-meta-row">
+          <div class="recipe-meta-cell"><div class="recipe-meta-label">Category</div><div class="recipe-meta-val">Dinner</div></div>
+          <div class="recipe-meta-cell"><div class="recipe-meta-label">Servings</div><div class="recipe-meta-val">2</div></div>
+          <div class="recipe-meta-cell"><div class="recipe-meta-label">Prep</div><div class="recipe-meta-val">5 min</div></div>
+          <div class="recipe-meta-cell"><div class="recipe-meta-label">Cook</div><div class="recipe-meta-val">15 min</div></div>
+        </div>
+        <div class="recipe-content">
+          <div class="recipe-ingredients">
+            <div style="font-size:10px;font-weight:500;margin-bottom:6px;color:var(--color-text-primary)">Ingredients</div>
+            <div class="recipe-ingredient-item">200g Guanciale</div>
+            <div class="recipe-ingredient-item">300g spaghetti</div>
+            <div class="recipe-ingredient-item">200g pecorino, grated</div>
+            <div class="recipe-ingredient-item">3 egg yolks</div>
+            <div class="recipe-ingredient-item">Salt & pepper</div>
+          </div>
+          <div class="recipe-directions">
+            <div style="font-size:10px;font-weight:500;margin-bottom:6px;color:var(--color-text-primary)">Directions</div>
+            <div class="recipe-step"><div class="step-num">1</div><div>Boil salted water.</div></div>
+            <div class="recipe-step"><div class="step-num">2</div><div>Dice and render guanciale in cold pan.</div></div>
+            <div class="recipe-step"><div class="step-num">3</div><div>Mix yolks and pecorino with pasta water.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="body" style="margin-top:.75rem">Structure: full-bleed hero image → tag chips (dot-separated) → H1 title → 4-cell metadata strip → long-form intro → ingredient notes → equipment → ingredients list → numbered steps → notes/FAQs. The metadata strip uses a hairline grid — each cell has a faint border. Ingredients and directions sit in a 2-column layout on desktop, stacked on mobile.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Buttons & CTAs</div>
+      <div class="chips" style="margin-top:.5rem">
+        <div style="background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:4px">View all recipes →</div>
+        <div style="background:transparent;color:#1a1a1a;font-size:13px;padding:10px 20px;border-radius:4px;border:1px solid #1a1a1a">See recipe →</div>
+        <div style="background:#1a1a1a;color:#fff;font-size:11px;padding:4px 10px;border-radius:3px;letter-spacing:.04em">New Recipe</div>
+      </div>
+      <div class="body" style="margin-top:.75rem">Primary CTA: solid ink (#1a1a1a), white text, 4px radius, no shadow. Secondary: ghost style, ink border and text. Arrow (→) used on text CTAs — not on pill buttons. No rounded pill CTAs anywhere. Hover state: #2c2c2a (slightly softer ink). Focus ring: 2px offset outline in #888780.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Footer</div>
+      <div class="footer-mock">
+        <div>
+          <div class="footer-headline">ANDY COOKS</div>
+          <div class="footer-tagline">Hey babe, what's for dinner?</div>
+        </div>
+        <div class="footer-links">
+          <span class="footer-link">About</span>
+          <span class="footer-link">Recipes</span>
+          <span class="footer-link">Contact</span>
+          <span class="footer-link">FAQs</span>
+        </div>
+      </div>
+      <div class="body" style="margin-top:.75rem">Full-bleed ink footer. Brand wordmark top-left. Tagline ("Hey babe, what's for dinner?") in italic, slightly muted. Two-column grid: social icons left, utility links right. Social icons as simple SVG marks — not icon fonts. Small acknowledgement text in the base at 11px, 50% opacity.</div>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div id="tab-layout" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Spacing scale</div>
+      <div style="margin-top:.75rem">
+        <div class="spacing-row"><div class="spacing-block" style="width:4px"></div><div class="spacing-label">4px — internal micro spacing (icon to label)</div></div>
+        <div class="spacing-row"><div class="spacing-block" style="width:8px"></div><div class="spacing-label">8px — tight component gap (badge to title)</div></div>
+        <div class="spacing-row"><div class="spacing-block" style="width:16px"></div><div class="spacing-label">16px — standard component padding</div></div>
+        <div class="spacing-row"><div class="spacing-block" style="width:24px"></div><div class="spacing-label">24px — card inner padding</div></div>
+        <div class="spacing-row"><div class="spacing-block" style="width:32px"></div><div class="spacing-label">32px — section vertical margin</div></div>
+        <div class="spacing-row"><div class="spacing-block" style="width:48px"></div><div class="spacing-label">48px — major section gap (desktop)</div></div>
+        <div class="spacing-row"><div class="spacing-block" style="width:80px"></div><div class="spacing-label">80px — hero vertical padding</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Grid system</div>
+      <div class="body">Max content width: <strong>1280px</strong>, centred. Side padding: <strong>20px mobile / 40px tablet / 80px desktop</strong>.</div>
+      <table class="tone-table" style="margin-top:.75rem">
+        <tr><td>Recipe listing grid</td><td>2-col mobile → 3-col tablet → 4-col desktop. Gap: 16px.</td></tr>
+        <tr><td>Recipe detail</td><td>Single column. Content max-width 720px centred. Ingredients/steps in 2-col at ≥640px.</td></tr>
+        <tr><td>Hero</td><td>Full viewport width, 60–80vh height. Background image with dark gradient overlay.</td></tr>
+        <tr><td>Product grid (shop)</td><td>3-col with square aspect-ratio images. Scroll-snap on mobile.</td></tr>
+        <tr><td>Section headers</td><td>H2 + "View all →" CTA in a flex row, space-between. Margin-bottom 24px before grid.</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Border radius</div>
+      <div class="chips">
+        <div class="chip">Cards: 8px</div>
+        <div class="chip">Buttons: 4px</div>
+        <div class="chip">Badges: 3px</div>
+        <div class="chip">Inputs: 8px</div>
+        <div class="chip">Images: 0px (clip-path via parent)</div>
+        <div class="chip">Full-bleed hero: 0px</div>
+      </div>
+      <div class="body" style="margin-top:.75rem">No pill-shaped components anywhere. The design deliberately avoids over-rounded UI — it feels editorial, not app-y. Keep radii small or absent. Images inside cards use overflow:hidden on the parent to clip naturally.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Motion</div>
+      <div class="body">Minimal animation. Hover transitions at 150ms ease. Card image zoom on hover at scale(1.02) over 300ms ease-out. No bouncy or spring animations. Page transitions: simple opacity fade at 200ms. No skeleton loaders — just a simple background colour pulse. Stick to CSS transitions on transform and opacity only.</div>
+    </div>
+  </div>
+
+  <!-- TONE -->
+  <div id="tab-tone" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Brand voice</div>
+      <div class="body">Andy Cooks positions as a professional chef who's also genuinely approachable. The language is direct and warm without being cutesy. Technical but never condescending.</div>
+      <table class="tone-table" style="margin-top:.75rem">
+        <tr><td>Tagline register</td><td>Casual, first-person, relational. "Hey babe, what's for dinner?" speaks directly to a partner in a shared kitchen.</td></tr>
+        <tr><td>Recipe intros</td><td>Lead with what makes the recipe special or tricky. Direct instruction before emotional framing.</td></tr>
+        <tr><td>Ingredient notes</td><td>Bold ingredient name. One paragraph explanation — why it matters, what to substitute. No bullet lists.</td></tr>
+        <tr><td>Chef tips</td><td>Named subsections ("Start guanciale in a cold pan"). Technique-first, reason second. Short paragraphs.</td></tr>
+        <tr><td>FAQs</td><td>Bold question as header. Direct, confident answer. Often ends with a practical takeaway.</td></tr>
+        <tr><td>CTAs</td><td>Arrow-forward ("See recipe →", "View all recipes →"). No "click here" or "learn more".</td></tr>
+        <tr><td>Social proof</td><td>Understated — star rating shown but not pushed.</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">PWA copy guidelines</div>
+      <div class="body">Mirror these patterns in your own UI copy to feel consistent with the source brand:</div>
+      <table class="tone-table" style="margin-top:.75rem">
+        <tr><td>Empty states</td><td>"No recipes yet — add one to get started." Short, no emojis.</td></tr>
+        <tr><td>Loading states</td><td>"Fetching recipe..." not "Loading..." — be specific.</td></tr>
+        <tr><td>Error messages</td><td>"Couldn't import from that URL." Cause + resolution in plain language.</td></tr>
+        <tr><td>Success states</td><td>"Recipe saved." Just say it — no celebration copy.</td></tr>
+        <tr><td>Buttons</td><td>Verbs: "Import", "Save", "Add to plan" — not "Submit" or "OK".</td></tr>
+        <tr><td>Section labels</td><td>ALL-CAPS tracked small-caps for meta labels (Prep · Cook · Serves). Sentence case for everything else.</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Photography & imagery</div>
+      <div class="body">All food photography is warm-toned, natural-light, close-up. Backgrounds are soft, textured (stone bench, linen, timber). The colour palette of the photography IS the accent palette of the site — let images carry warmth; keep UI chrome neutral. For imported recipes, use the thumbnail from the source platform and apply a consistent aspect ratio crop (3:4 portrait for cards, 16:9 for detail hero).</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
