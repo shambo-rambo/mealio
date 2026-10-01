@@ -38,10 +38,12 @@ function SortableItemList({
   items,
   onToggle,
   onEdit,
+  onDelete,
 }: {
   items: ShoppingItem[]
   onToggle: (item: ShoppingItem) => void
   onEdit: (item: ShoppingItem) => void
+  onDelete: (item: ShoppingItem) => void
 }) {
   const [order, setOrder] = useState<string[]>(() => sortByCategory(items).map((i) => i.id))
   const orderRef = useRef(order)
@@ -107,8 +109,8 @@ function SortableItemList({
   return (
     <div className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-card divide-y divide-outline-variant/15">
       {sorted.map((item) => (
+        <SwipeRow key={item.id} onDelete={() => onDelete(item)} deleteLabel="Delete item">
         <div
-          key={item.id}
           ref={(el) => { if (el) itemEls.current.set(item.id, el); else itemEls.current.delete(item.id) }}
           className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${draggingId === item.id ? 'bg-surface-container' : ''}`}
         >
@@ -153,6 +155,7 @@ function SortableItemList({
             <span className="material-symbols-outlined text-outline-variant/50 text-[22px]">drag_indicator</span>
           </div>
         </div>
+        </SwipeRow>
       ))}
     </div>
   )
@@ -492,7 +495,7 @@ function EyeToggle({ hidden, onToggle, label }: { hidden: boolean; onToggle: () 
 
 // ── Swipe row (left = delete, right = add to list) ───────────────────────────
 
-function SwipeRow({ onDelete, onAdd, children }: { onDelete: () => void; onAdd?: () => void; children: React.ReactNode }) {
+function SwipeRow({ onDelete, onAdd, deleteLabel = 'Delete from pantry', children }: { onDelete: () => void; onAdd?: () => void; deleteLabel?: string; children: React.ReactNode }) {
   const REVEAL = 88
   const [dx, setDx] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -536,7 +539,7 @@ function SwipeRow({ onDelete, onAdd, children }: { onDelete: () => void; onAdd?:
       )}
       <button
         onClick={onDelete}
-        aria-label="Delete from pantry"
+        aria-label={deleteLabel}
         className="absolute inset-y-0 right-0 bg-error text-on-error flex items-center justify-center"
         style={{ width: REVEAL }}
       >
@@ -602,7 +605,7 @@ function PantryView({
                   onAdd={onList ? undefined : () => onAdd(item.name, item.category)}
                 >
                   <div className="w-full flex items-center gap-3 px-4 py-3">
-                    <span className={`font-medium flex-1 min-w-0 truncate ${onList ? 'text-on-surface-variant' : 'text-on-surface'}`}>{item.name}</span>
+                    <span className={`font-medium flex-1 min-w-0 truncate ${onList ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}>{item.name}</span>
                     {onList && (
                       <span className="flex items-center gap-1 text-xs text-primary font-bold">
                         <span className="material-symbols-outlined text-[16px]"
@@ -964,6 +967,7 @@ export function ListDetailPage() {
   const listName = lists.find((l) => l.id === listId)?.name ?? 'Shopping List'
   const toggleItem = useToggleItemMutation(listId!)
   const addItem = useAddItemMutation(listId!)
+  const deleteListItem = useDeleteItemMutation(listId!)
 
   // Nav 1: which section
   const [primaryTab, setPrimaryTab] = useState<'list' | 'plan' | 'pantry'>('list')
@@ -986,8 +990,7 @@ export function ListDetailPage() {
     : baseItems.filter((i) => i.storeId === storeTab)
 
   const [hideCompleted, toggleHideCompleted] = useHideDone('mealio-list-hide-completed')
-  const uncheckedItems = filteredItems.filter((i) => !i.checked)
-  const checkedItems = filteredItems.filter((i) => i.checked)
+  const visibleItems = hideCompleted ? filteredItems.filter((i) => !i.checked) : filteredItems
 
   const handleChangePrimary = (tab: 'list' | 'plan' | 'pantry') => {
     setPrimaryTab(tab)
@@ -1046,7 +1049,7 @@ export function ListDetailPage() {
         <div className="flex px-6" role="tablist">
           {([
             { id: 'list', label: 'List' },
-            { id: 'plan', label: 'From plan' },
+            { id: 'plan', label: 'Meal Plan List' },
             { id: 'pantry', label: 'Pantry' },
           ] as const).map((tab) => (
             <button
@@ -1065,28 +1068,31 @@ export function ListDetailPage() {
           ))}
         </div>
 
-        {/* Store filter — only when there is something to filter by */}
-        {showStoreNav && stores.length > 0 && (
-          <div className="px-6 py-2 flex gap-2 overflow-x-auto no-scrollbar items-center">
-            {[{ id: 'all', name: 'All' }, ...stores].map((store) => (
-              <button
-                key={store.id}
-                onClick={() => setStoreTab(store.id)}
-                className={`flex-shrink-0 py-1.5 px-3 rounded-full text-xs font-bold transition-all ${
-                  storeTab === store.id
-                    ? 'bg-primary text-on-primary'
-                    : 'bg-surface-container text-on-surface-variant'
-                }`}
-              >
-                {store.name}
-              </button>
-            ))}
+        {/* Store filter + hide-completed eye (right) */}
+        {showStoreNav && (
+          <div className="px-6 py-2 flex gap-2 items-center">
+            <div className="flex-1 min-w-0 flex gap-2 overflow-x-auto no-scrollbar items-center">
+              {stores.length > 0 && [{ id: 'all', name: 'All' }, ...stores].map((store) => (
+                <button
+                  key={store.id}
+                  onClick={() => setStoreTab(store.id)}
+                  className={`flex-shrink-0 py-1.5 px-3 rounded-full text-xs font-bold transition-all ${
+                    storeTab === store.id
+                      ? 'bg-primary text-on-primary'
+                      : 'bg-surface-container text-on-surface-variant'
+                  }`}
+                >
+                  {store.name}
+                </button>
+              ))}
+            </div>
+            <EyeToggle hidden={hideCompleted} onToggle={toggleHideCompleted} label="completed items" />
           </div>
         )}
       </div>
 
       {/* Main content — margin accounts for 1 or 2 nav rows */}
-      <main className={`px-6 space-y-8 ${showStoreNav && stores.length > 0 ? 'mt-[calc(174px+env(safe-area-inset-top))]' : 'mt-[calc(130px+env(safe-area-inset-top))]'}`}>
+      <main className={`px-6 space-y-8 ${showStoreNav ? 'mt-[calc(174px+env(safe-area-inset-top))]' : 'mt-[calc(130px+env(safe-area-inset-top))]'}`}>
         {primaryTab === 'pantry' ? (
           <PantryView
             historyItems={pantryHistory}
@@ -1108,46 +1114,15 @@ export function ListDetailPage() {
           />
         ) : (
           <>
-            <SortableItemList
-              items={uncheckedItems}
-              onToggle={handleToggle}
-              onEdit={(item) => setEditingItemId(item.id)}
-            />
-
-            {checkedItems.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/70">
-                    Completed ({checkedItems.length})
-                  </p>
-                  <EyeToggle hidden={hideCompleted} onToggle={toggleHideCompleted} label="completed items" />
-                </div>
-                {!hideCompleted && (
-                <div className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-card divide-y divide-outline-variant/15 opacity-50">
-                  {checkedItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3.5">
-                      <button
-                        onClick={() => handleToggle(item)}
-                        className="w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center bg-primary border-2 border-primary active:scale-95 transition-all"
-                      >
-                        <span className="material-symbols-outlined text-on-primary text-[14px]"
-                          style={{ fontVariationSettings: "'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 20" }}>
-                          check
-                        </span>
-                      </button>
-                      <button onClick={() => setEditingItemId(item.id)} className="flex-1 min-w-0 text-left flex items-baseline gap-1.5">
-                        <span className="font-semibold text-on-surface line-through text-on-surface-variant/60">
-                          {item.name}
-                        </span>
-                        {itemAmount(item) && (
-                          <span className="text-sm text-on-surface-variant/40">{itemAmount(item)}</span>
-                        )}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                )}
-              </section>
+            {visibleItems.length === 0 ? (
+              <p className="text-center text-sm text-on-surface-variant py-10">All done — completed items are hidden.</p>
+            ) : (
+              <SortableItemList
+                items={visibleItems}
+                onToggle={handleToggle}
+                onEdit={(item) => setEditingItemId(item.id)}
+                onDelete={(item) => deleteListItem.mutate(item.id)}
+              />
             )}
           </>
         )}

@@ -478,21 +478,32 @@ export async function generateDietaryTags(
   }
 }
 
-export async function suggestItemCategory(itemName: string, apiKey: string): Promise<string> {
-  const client = new Anthropic({ apiKey })
-  const msg = await client.messages.create({
-    model: MODEL,
-    max_tokens: 32,
-    messages: [
-      {
-        role: 'user',
-        content: `What grocery store category does "${itemName}" belong to? Return ONLY the category name from: Produce, Dairy, Meat & Seafood, Bakery, Pantry, Beverages, Frozen, Snacks, Health & Beauty, Household, Other`,
-      },
-    ],
-  })
+export const ITEM_CATEGORIES = [
+  'Produce', 'Dairy', 'Meat & Seafood', 'Bakery', 'Pantry', 'Beverages',
+  'Frozen', 'Snacks', 'Health & Beauty', 'Household', 'Other',
+] as const
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : 'Other'
-  return text
+/** Quick classification with Jev (TypeSafe AI): a single Choice question over ITEM_CATEGORIES. */
+export async function suggestItemCategory(itemName: string, apiKey: string): Promise<string> {
+  const res = await fetch('https://api.typesafe.ai/v1/systemone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'jev-latest',
+      state: itemName,
+      questions: {
+        category: {
+          type: 'choice',
+          instructions: 'Which grocery store category does this item belong to?',
+          criteria: Object.fromEntries(ITEM_CATEGORIES.map((c) => [c, c])),
+        },
+      },
+    }),
+  })
+  if (!res.ok) throw new Error(`TypeSafe ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  const data = await res.json() as { answers?: { category?: { choice?: string } } }
+  const choice = data.answers?.category?.choice
+  return ITEM_CATEGORIES.find((c) => c === choice) ?? 'Other'
 }
 
 export async function chatSuggestMeal(

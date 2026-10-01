@@ -60,3 +60,18 @@ export async function getDefaultCategoryForItem(db: AppDB, familyId: string, nam
   const item = await findHistory(db, familyId, name)
   return item?.category ?? null
 }
+
+/** Predict a shop from the family's other items in the same category (most-used wins). */
+export async function getStoreForCategory(db: AppDB, familyId: string, category: string) {
+  const items = await db.query.itemHistory.findMany({
+    where: and(eq(itemHistory.familyId, familyId), eq(itemHistory.category, category)),
+  })
+  const score = new Map<string, number>()
+  for (const i of items) {
+    if (i.storeId) score.set(i.storeId, (score.get(i.storeId) ?? 0) + i.usageCount)
+  }
+  let best: string | null = null
+  let bestScore = 0
+  for (const [id, n] of score) if (n > bestScore) { best = id; bestScore = n }
+  return best
+}

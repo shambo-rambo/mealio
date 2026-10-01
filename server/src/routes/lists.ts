@@ -3,7 +3,7 @@ import { eq, and, asc, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { shoppingLists, shoppingItems, itemHistory, itemLines } from '../db/schema.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { upsertItemHistory, normalizeItemName, getItemSuggestions, getDefaultStoreForItem, getDefaultCategoryForItem } from '../lib/itemHistory.js'
+import { upsertItemHistory, normalizeItemName, getItemSuggestions, getDefaultStoreForItem, getDefaultCategoryForItem, getStoreForCategory } from '../lib/itemHistory.js'
 import { broadcastToFamily } from '../lib/ws.js'
 import { pushToFamily } from '../lib/push.js'
 import { suggestItemCategory } from '../lib/ai.js'
@@ -274,13 +274,29 @@ listsRoutes.post('/:id/items', async (c) => {
     return c.json({ item: await withLines(db, updated), deduplicated: !wasChecked, reopened: wasChecked })
   }
 
-  const defaultStoreId = rest.storeId ?? await getDefaultStoreForItem(db, familyId!, name)
+  let defaultStoreId = rest.storeId ?? await getDefaultStoreForItem(db, familyId!, name)
   // Use previously-learned category so repeat items are categorised immediately
-  const defaultCategory = rest.category ?? await getDefaultCategoryForItem(db, familyId!, name)
+  let defaultCategory = rest.category ?? await getDefaultCategoryForItem(db, familyId!, name)
+
+  // Unknown category: ask the AI up front (short timeout) so the item appears already filed
+  if (!defaultCategory) {
+    try {
+      defaultCategory = await Promise.race([
+        suggestItemCategory(name, c.env.TYPESAFE_API_KEY),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
+      ])
+    } catch (err) {
+      console.error('category suggestion failed', err)
+    }
+  }
+  // Shop follows the category: most-used shop among other items in it
+  if (defaultCategory && !defaultStoreId) {
+    defaultStoreId = await getStoreForCategory(db, familyId!, defaultCategory)
+  }
 
   const [item] = await db.insert(shoppingItems).values({
-    listId, name: name.trim(), quantity: quantity ?? null, storeId: defaultStoreId, category: defaultCategory, createdBy: userId,
     ...rest,
+    listId, name: name.trim(), quantity: quantity ?? null, storeId: defaultStoreId, category: defaultCategory, createdBy: userId,
   }).returning()
 
   if (amount) {
@@ -291,20 +307,7 @@ listsRoutes.post('/:id/items', async (c) => {
 
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:added', listId, itemId: item.id })
 
-  // Fire-and-forget AI category suggestion for items with no known category
-  if (!defaultCategory) {
-    c.executionCtx.waitUntil(
-      suggestItemCategory(name, c.env.ANTHROPIC_API_KEY).then(async (cat) => {
-        await db.update(shoppingItems).set({ category: cat }).where(eq(shoppingItems.id, item.id))
-        // Save to history now that we have a real category
-        await upsertItemHistory(db, familyId!, name, cat, defaultStoreId)
-        await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:updated', listId, itemId: item.id })
-      }).catch(() => {}),
-    )
-  } else {
-    // Category already known — persist usage count + store preference
-    await upsertItemHistory(db, familyId!, name, defaultCategory, defaultStoreId)
-  }
+  if (defaultCategory) await upsertItemHistory(db, familyId!, name, defaultCategory, defaultStoreId)
 
   return c.json({ item: await withLines(db, item) }, 201)
 })
