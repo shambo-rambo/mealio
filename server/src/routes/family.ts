@@ -40,7 +40,7 @@ familyRoutes.post('/', async (c) => {
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
   if (!user) return c.json({ error: { code: 'server_error', message: 'User not found' } }, 500)
 
-  const token = await signToken({ sub: user.id, familyId, role: 'owner', name: user.name, email: user.email })
+  const token = await signToken({ sub: user.id, familyId, role: 'owner', name: user.name, email: user.email }, c.env?.JWT_SECRET as string | undefined)
   const { passwordHash: _, ...safeUser } = user
   return c.json({ token, user: safeUser }, 201)
 })
@@ -93,7 +93,7 @@ familyRoutes.post('/join', async (c) => {
   if (!user) return c.json({ error: { code: 'server_error', message: 'User not found' } }, 500)
 
   const family = await db.query.families.findFirst({ where: eq(families.id, invite.familyId) })
-  const token = await signToken({ sub: user.id, familyId: user.familyId, role: user.role as 'owner' | 'admin' | 'member', name: user.name, email: user.email })
+  const token = await signToken({ sub: user.id, familyId: user.familyId, role: user.role as 'owner' | 'admin' | 'member', name: user.name, email: user.email }, c.env?.JWT_SECRET as string | undefined)
   const { passwordHash: _, ...safeUser } = user
   return c.json({ token, user: safeUser, family })
 })

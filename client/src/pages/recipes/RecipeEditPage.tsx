@@ -92,7 +92,7 @@ export function RecipeEditPage() {
     return (
       <div className="min-h-screen bg-surface pb-10">
         <TopBar title="Edit recipe" showBack />
-        <div className="pt-20 px-6 mt-4 space-y-4">
+        <div className="pt-topbar px-6 mt-4 space-y-4">
           <Skeleton className="h-12 w-full rounded-xl" />
           <Skeleton className="h-10 w-full rounded-xl" />
           <Skeleton className="h-32 w-full rounded-xl" />
@@ -105,7 +105,7 @@ export function RecipeEditPage() {
     <div className="min-h-screen bg-surface pb-10">
       <TopBar title="Edit recipe" showBack />
 
-      <div className="pt-20 px-6 mt-4 space-y-6">
+      <div className="pt-topbar px-6 mt-4 space-y-6">
         {/* Basics */}
         <section className="space-y-4">
           <h2 className="font-headline font-bold text-xs text-on-surface-variant uppercase tracking-widest">Basics</h2>

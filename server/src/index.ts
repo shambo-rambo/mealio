@@ -11,7 +11,7 @@ import { collectionsRoutes } from './routes/collections.js'
 import { mealPlanRoutes } from './routes/mealPlan.js'
 import { uploadRoutes } from './routes/upload.js'
 import { pushRoutes } from './routes/push.js'
-import { jwtVerify } from 'jose'
+import { verifyToken } from './lib/jwt.js'
 import type { AppEnv } from './types.js'
 
 export { FamilyRoom } from './durable-objects/FamilyRoom.js'
@@ -53,19 +53,35 @@ app.get('/uploads/:filename', async (c) => {
 // WebSocket upgrade — authenticates JWT then hands off to FamilyRoom DO
 // ---------------------------------------------------------------------------
 app.get('/ws', async (c) => {
-  const token = c.req.query('token')
-  if (!token) return c.json({ error: 'Missing token' }, 401)
-
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev_secret')
-  let familyId: string | null = null
-  try {
-    const { payload } = await jwtVerify(token, secret)
-    familyId = (payload.familyId as string | null) ?? null
-  } catch {
-    return c.json({ error: 'Invalid token' }, 401)
+  // Reject non-WebSocket requests before doing any auth work
+  if (c.req.header('Upgrade') !== 'websocket') {
+    return c.json({ error: 'Expected WebSocket upgrade' }, 426)
   }
 
-  if (!familyId) return c.json({ error: 'No family' }, 403)
+  // Helper: accept the WS upgrade then immediately close with an app-defined
+  // error code (RFC 6455 §7.4.2 — codes 4000-4999 are application-reserved).
+  // This lets the client read event.code in onclose rather than getting a
+  // featureless onerror with no status information.
+  const wsReject = (code: number, reason: string): Response => {
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
+    server.accept()
+    server.close(code, reason)
+    return new Response(null, { status: 101, webSocket: client })
+  }
+
+  const token = c.req.query('token')
+  if (!token) return wsReject(4401, 'Missing token')
+
+  let familyId: string | null = null
+  try {
+    const payload = await verifyToken(token, c.env?.JWT_SECRET as string | undefined)
+    familyId = payload.familyId ?? null
+  } catch {
+    return wsReject(4401, 'Invalid or expired token')
+  }
+
+  if (!familyId) return wsReject(4403, 'No family associated with this account')
 
   const id = c.env.FAMILY_ROOM.idFromName(familyId)
   const room = c.env.FAMILY_ROOM.get(id)

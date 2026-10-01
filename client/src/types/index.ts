@@ -39,6 +39,19 @@ export interface ShoppingList {
   uncheckedCount?: number
 }
 
+/** One reason an item is on the list: the usual buy, or a recipe that needs some. */
+export interface ItemLine {
+  id: string
+  itemId: string
+  source: 'manual' | 'recipe'
+  sourceName: string | null
+  recipeId: string | null
+  amount: string
+  quantity: number | null
+  unit: string | null
+  selected: boolean
+}
+
 export interface ShoppingItem {
   id: string
   listId: string
@@ -54,6 +67,7 @@ export interface ShoppingItem {
   recipeSourceId: string | null
   createdBy: string | null
   updatedAt: string
+  lines?: ItemLine[]
 }
 
 export interface ItemHistorySuggestion {
@@ -153,6 +167,7 @@ export interface MealPlanEntry {
 
 export interface RecipeImportResult {
   title: string
+  description?: string | null
   sourceUrl: string | null
   servings: number
   prepTime: number | null
@@ -165,6 +180,7 @@ export interface RecipeImportResult {
   }>
   steps: Array<{ instruction: string }>
   dietaryTags: DietaryTag[]
+  thumbnailUrl?: string | null
   nutrition: {
     calories: number | null
     protein: number | null
@@ -209,6 +225,25 @@ export const CATEGORIES = [
 ] as const
 
 export type Category = (typeof CATEGORIES)[number]
+
+export interface PendingMealPlan {
+  date: string
+  mealLabel: MealLabel
+}
+
+export interface SuggestMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export type SuggestTurnRequest = {
+  mealLabel: MealLabel
+  messages: SuggestMessage[]
+}
+
+export type SuggestTurnResponse =
+  | { type: 'question'; text: string }
+  | { type: 'recipe'; importResult: RecipeImportResult }
 
 export const DIETARY_TAG_LABELS: Record<DietaryTag, string> = {
   vegetarian: 'Vegetarian',

@@ -18,9 +18,14 @@ export default defineConfig(async () => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'script-defer',
         manifest: false, // served from public/manifest.json
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // Required for Web Share Target and SPA routing:
+          // tells the SW to serve index.html for any navigation not in the precache
+          navigateFallback: 'index.html',
+          navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
           runtimeCaching: [
             {
               urlPattern: /^\/api\/v1\/(lists|recipes|meal-plan|collections|stores)/,

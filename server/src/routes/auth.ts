@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { users, families } from '../db/schema.js'
+import { users } from '../db/schema.js'
 import { signToken } from '../lib/jwt.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { registerSchema, loginSchema } from '../schemas/auth.js'
@@ -25,19 +25,15 @@ authRoutes.post('/register', async (c) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 12)
-  const familyId = crypto.randomUUID()
   const userId = crypto.randomUUID()
 
-  // D1 doesn't support transactions — use batch for atomicity
-  await db.batch([
-    db.insert(families).values({ id: familyId, name: `${name}'s Family`, ownerId: userId }),
-    db.insert(users).values({ id: userId, name, email, passwordHash, familyId, role: 'owner' }),
-  ])
+  await db.insert(users).values({ id: userId, name, email, passwordHash, familyId: null, role: 'owner' })
 
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
   if (!user) return c.json({ error: { code: 'server_error', message: 'Failed to create user' } }, 500)
 
-  const token = await signToken({ sub: user.id, familyId: user.familyId, role: user.role as 'owner', name: user.name, email: user.email })
+  const jwtSecret = c.env?.JWT_SECRET as string | undefined
+  const token = await signToken({ sub: user.id, familyId: null, role: user.role as 'owner', name: user.name, email: user.email }, jwtSecret)
   const { passwordHash: _, ...safeUser } = user
   return c.json({ token, user: safeUser }, 201)
 })
@@ -57,7 +53,8 @@ authRoutes.post('/login', async (c) => {
   const valid = await bcrypt.compare(password, user.passwordHash)
   if (!valid) return c.json({ error: { code: 'invalid_credentials', message: 'Invalid email or password' } }, 401)
 
-  const token = await signToken({ sub: user.id, familyId: user.familyId, role: user.role as 'owner' | 'admin' | 'member', name: user.name, email: user.email })
+  const jwtSecret = c.env?.JWT_SECRET as string | undefined
+  const token = await signToken({ sub: user.id, familyId: user.familyId, role: user.role as 'owner' | 'admin' | 'member', name: user.name, email: user.email }, jwtSecret)
   const { passwordHash: _, ...safeUser } = user
   return c.json({ token, user: safeUser })
 })

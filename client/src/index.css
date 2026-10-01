@@ -10,7 +10,7 @@
   }
 
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     @apply bg-surface text-on-surface;
     min-height: 100dvh;
     /* Safe area insets for notched devices */
@@ -44,7 +44,16 @@
   }
 
   .font-headline {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  /* Clear the fixed TopBar (4.25rem) plus the device notch / status bar */
+  .pt-topbar {
+    padding-top: calc(5rem + env(safe-area-inset-top));
+  }
+  .pt-topbar-flush {
+    padding-top: calc(4.25rem + env(safe-area-inset-top));
   }
 
   /* Safe area padding */
@@ -62,13 +71,14 @@
   backdrop-filter: blur(2px);
 }
 
-/* Frosted glass */
+/* Frosted glass — warm off-white tint for content overlays */
 .glass {
   background: rgba(247, 251, 243, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
 
+/* Dark glass — ink tint for nav */
 .glass-dark {
   background: rgba(224, 228, 220, 0.85);
   backdrop-filter: blur(20px);

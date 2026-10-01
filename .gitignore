@@ -15,6 +15,7 @@ uploads/
 
 # Environment variables — NEVER commit
 .env
+server/.dev.vars
 
 # OS
 .DS_Store

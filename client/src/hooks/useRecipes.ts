@@ -21,6 +21,7 @@ export function useRecipeQuery(id: string | null) {
     queryKey: queryKeys.recipes.detail(id ?? ''),
     queryFn: () => api.get<{ recipe: Recipe }>(`/recipes/${id}`).then((r) => r.data.recipe),
     enabled: !!id,
+    retry: false,
   })
 }
 
@@ -37,7 +38,7 @@ export function useSaveRecipeMutation() {
   return useMutation({
     mutationFn: (data: Partial<Recipe> & { title: string }) =>
       api.post<{ recipe: Recipe }>('/recipes', data).then((r) => r.data.recipe),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.recipes.all() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.recipes.lists() }),
   })
 }
 
@@ -48,7 +49,7 @@ export function useUpdateRecipeMutation(id: string) {
       api.patch<{ recipe: Recipe }>(`/recipes/${id}`, data).then((r) => r.data.recipe),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.recipes.detail(id) })
-      qc.invalidateQueries({ queryKey: queryKeys.recipes.all() })
+      qc.invalidateQueries({ queryKey: queryKeys.recipes.lists() })
     },
   })
 }
@@ -57,7 +58,12 @@ export function useDeleteRecipeMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.delete(`/recipes/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.recipes.all() }),
+    // Do NOT removeQueries/cancelQueries here — that would cause the still-mounted
+    // RecipeDetailPage to immediately re-fetch a 404. Navigation unmounts the
+    // component first, after which the stale list query refetches cleanly.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.recipes.lists() })
+    },
   })
 }
 

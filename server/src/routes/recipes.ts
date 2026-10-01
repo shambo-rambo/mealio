@@ -8,13 +8,27 @@ import {
 import { authMiddleware } from '../middleware/auth.js'
 import {
   parseRecipeFromUrl, parseRecipeFromText, parseRecipeFromPhoto,
+  parseRecipeFromSocialVideo,
   generateNutrition, generateDietaryTags,
 } from '../lib/ai.js'
+import { detectPlatform } from '../lib/detect.js'
+import { fetchInstagramData } from '../lib/extractors/instagram.js'
+import { fetchTikTokData } from '../lib/extractors/tiktok.js'
+import { fetchYouTubeData } from '../lib/extractors/youtube.js'
 import { broadcastToFamily } from '../lib/ws.js'
 import type { AppEnv, AppDB } from '../types.js'
 
 export const recipesRoutes = new Hono<AppEnv>()
 recipesRoutes.use('*', authMiddleware)
+
+// D1 caps bound parameters at 100 per statement. Split multi-row inserts into
+// chunks sized so that (rows × columnsPerRow) stays comfortably below that limit.
+function inChunks<T>(arr: T[], colsPerRow: number): T[][] {
+  const size = Math.max(1, Math.floor(99 / colsPerRow))
+  const result: T[][] = []
+  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size))
+  return result
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -122,6 +136,7 @@ const ingredientSchema = z.object({
 const recipeBodySchema = z.object({
   title: z.string().min(1).max(200),
   sourceUrl: z.string().nullable().optional(),
+  pictureUrl: z.string().nullable().optional(),
   servings: z.number().int().min(1).default(4),
   prepTime: z.number().nullable().optional(),
   cookTime: z.number().nullable().optional(),
@@ -151,11 +166,32 @@ recipesRoutes.post('/', async (c) => {
 
   const recipeId = crypto.randomUUID()
   await db.insert(recipes).values({ id: recipeId, familyId, createdBy: userId, ...recipeData })
-  if (ings?.length) await db.insert(ingredients).values(ings.map((ing, i) => ({ recipeId, sortOrder: i, ...ing })))
-  if (steps?.length) await db.insert(recipeSteps).values(steps.map((s, i) => ({ recipeId, instruction: s.instruction, sortOrder: i })))
-  if (tags?.length) await db.insert(dietaryTags).values(tags.map((tag) => ({ recipeId, tag: tag as any })))
+
+  // ingredients: 7 cols (id, recipeId, name, quantity, unit, prepNote, sortOrder) → 14 rows/chunk
+  if (ings?.length) {
+    const rows = ings.map((ing, i) => ({ recipeId, sortOrder: i, ...ing }))
+    for (const chunk of inChunks(rows, 7)) await db.insert(ingredients).values(chunk)
+  }
+
+  // steps: 4 cols (id, recipeId, instruction, sortOrder) → 24 rows/chunk
+  if (steps?.length) {
+    const rows = steps.map((s, i) => ({ recipeId, instruction: s.instruction, sortOrder: i }))
+    for (const chunk of inChunks(rows, 4)) await db.insert(recipeSteps).values(chunk)
+  }
+
+  // tags: 3 cols (id, recipeId, tag) → 33 rows/chunk
+  if (tags?.length) {
+    const rows = tags.map((tag) => ({ recipeId, tag: tag as any }))
+    for (const chunk of inChunks(rows, 3)) await db.insert(dietaryTags).values(chunk)
+  }
+
   if (nut) await db.insert(nutrition).values({ recipeId, ...nut, perServings: recipeData.servings })
-  if (collectionIds?.length) await db.insert(recipeCollections).values(collectionIds.map((cid) => ({ recipeId, collectionId: cid })))
+
+  // collections: 2 cols (recipeId, collectionId) → 49 rows/chunk
+  if (collectionIds?.length) {
+    const rows = collectionIds.map((cid) => ({ recipeId, collectionId: cid }))
+    for (const chunk of inChunks(rows, 2)) await db.insert(recipeCollections).values(chunk)
+  }
 
   const recipe = await getRecipeFull(db, recipeId, userId)
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId, { type: 'recipe:created', recipeId })
@@ -181,15 +217,24 @@ recipesRoutes.patch('/:id', async (c) => {
   if (Object.keys(recipeData).length) await db.update(recipes).set(recipeData).where(eq(recipes.id, id))
   if (ings) {
     await db.delete(ingredients).where(eq(ingredients.recipeId, id))
-    if (ings.length) await db.insert(ingredients).values(ings.map((ing, i) => ({ recipeId: id, sortOrder: i, ...ing })))
+    if (ings.length) {
+      const rows = ings.map((ing, i) => ({ recipeId: id, sortOrder: i, ...ing }))
+      for (const chunk of inChunks(rows, 7)) await db.insert(ingredients).values(chunk)
+    }
   }
   if (steps) {
     await db.delete(recipeSteps).where(eq(recipeSteps.recipeId, id))
-    if (steps.length) await db.insert(recipeSteps).values(steps.map((s, i) => ({ recipeId: id, instruction: s.instruction, sortOrder: i })))
+    if (steps.length) {
+      const rows = steps.map((s, i) => ({ recipeId: id, instruction: s.instruction, sortOrder: i }))
+      for (const chunk of inChunks(rows, 4)) await db.insert(recipeSteps).values(chunk)
+    }
   }
   if (tags) {
     await db.delete(dietaryTags).where(eq(dietaryTags.recipeId, id))
-    if (tags.length) await db.insert(dietaryTags).values(tags.map((t) => ({ recipeId: id, tag: t as any })))
+    if (tags.length) {
+      const rows = tags.map((t) => ({ recipeId: id, tag: t as any }))
+      for (const chunk of inChunks(rows, 3)) await db.insert(dietaryTags).values(chunk)
+    }
   }
   if (nut !== undefined) {
     await db.delete(nutrition).where(eq(nutrition.recipeId, id))
@@ -197,7 +242,10 @@ recipesRoutes.patch('/:id', async (c) => {
   }
   if (collectionIds) {
     await db.delete(recipeCollections).where(eq(recipeCollections.recipeId, id))
-    if (collectionIds.length) await db.insert(recipeCollections).values(collectionIds.map((cid) => ({ recipeId: id, collectionId: cid })))
+    if (collectionIds.length) {
+      const rows = collectionIds.map((cid) => ({ recipeId: id, collectionId: cid }))
+      for (const chunk of inChunks(rows, 2)) await db.insert(recipeCollections).values(chunk)
+    }
   }
 
   const recipe = await getRecipeFull(db, id, userId)
@@ -246,15 +294,42 @@ recipesRoutes.post('/import', async (c) => {
   if (!result.success) return c.json({ error: { code: 'validation_error', message: 'type and payload required' } }, 400)
 
   const { type, payload, mediaType } = result.data
+  const anthropicKey = c.env.ANTHROPIC_API_KEY
   try {
     let parsed
-    if (type === 'url') parsed = await parseRecipeFromUrl(payload)
-    else if (type === 'photo') parsed = await parseRecipeFromPhoto(payload, mediaType ?? 'image/jpeg')
-    else parsed = await parseRecipeFromText(payload)
+    if (type === 'url') {
+      const platform = detectPlatform(payload)
+      if (platform === 'instagram') {
+        const igToken = c.env.INSTAGRAM_TOKEN
+        if (!igToken) return c.json({ error: { code: 'import_failed', message: 'Instagram import not configured' } }, 502)
+        const igData = await fetchInstagramData(payload, igToken)
+        parsed = { ...await parseRecipeFromSocialVideo(igData, payload, anthropicKey), thumbnailUrl: igData.thumbnailUrl ?? null }
+      } else if (platform === 'tiktok') {
+        const ttData = await fetchTikTokData(payload)
+        parsed = { ...await parseRecipeFromSocialVideo(ttData, payload, anthropicKey), thumbnailUrl: ttData.thumbnailUrl ?? null }
+      } else if (platform === 'youtube') {
+        const key = c.env.YOUTUBE_API_KEY
+        if (!key) return c.json({ error: { code: 'import_failed', message: 'YouTube import not configured' } }, 502)
+        const ytData = await fetchYouTubeData(payload, key)
+        parsed = { ...await parseRecipeFromSocialVideo(ytData, payload, anthropicKey), thumbnailUrl: ytData.thumbnailUrl ?? null }
+      } else {
+        parsed = await parseRecipeFromUrl(payload, anthropicKey)
+      }
+    } else if (type === 'photo') {
+      parsed = await parseRecipeFromPhoto(payload, mediaType ?? 'image/jpeg', anthropicKey)
+    } else {
+      parsed = await parseRecipeFromText(payload, anthropicKey)
+    }
     return c.json({ result: parsed })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Import failed'
-    return c.json({ error: { code: 'import_failed', message: msg } }, 422)
+    if (msg === 'no_recipe_found') {
+      return c.json({ error: { code: 'no_recipe_found', message: 'No recipe found in this post' } }, 422)
+    }
+    if (msg === 'post_unavailable') {
+      return c.json({ error: { code: 'post_unavailable', message: 'This post is private or unavailable' } }, 422)
+    }
+    return c.json({ error: { code: 'import_failed', message: msg } }, 502)
   }
 })
 

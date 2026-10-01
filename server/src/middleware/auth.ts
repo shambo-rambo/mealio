@@ -1,5 +1,6 @@
 import { createMiddleware } from 'hono/factory'
-import { jwtVerify } from 'jose'
+import { verifyToken } from '../lib/jwt.js'
+import type { AppEnv } from '../types.js'
 
 export type AuthUser = {
   userId: string
@@ -13,22 +14,22 @@ declare module 'hono' {
   }
 }
 
-export const authMiddleware = createMiddleware(async (c, next) => {
+export const authMiddleware = createMiddleware<AppEnv>(async (c, next) => {
   const authorization = c.req.header('Authorization')
   if (!authorization?.startsWith('Bearer ')) {
     return c.json({ error: { code: 'unauthorized', message: 'Missing or invalid token' } }, 401)
   }
 
   const token = authorization.slice(7)
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev_secret')
+  const secret = c.env?.JWT_SECRET as string | undefined
 
   try {
-    const { payload } = await jwtVerify(token, secret)
+    const payload = await verifyToken(token, secret)
 
     c.set('user', {
-      userId: payload.sub as string,
-      familyId: (payload.familyId as string | null) ?? null,
-      role: (payload.role as AuthUser['role']) ?? 'member',
+      userId: payload.sub,
+      familyId: payload.familyId ?? null,
+      role: payload.role ?? 'member',
     })
 
     await next()

@@ -11,31 +11,28 @@ export function BottomNav() {
   const location = useLocation()
 
   return (
-    <nav className="fixed bottom-0 left-0 w-full z-50 rounded-t-[32px] shadow-nav-bottom overflow-hidden">
-      <div className="glass-dark flex justify-around items-center h-20 px-4 pb-safe">
+    <nav className="fixed bottom-0 left-0 w-full z-50 bg-white/90 backdrop-blur-xl border-t border-outline-variant/40 shadow-nav-top">
+      <div className="flex justify-around items-center h-20 px-2 pb-safe">
         {tabs.map(({ to, icon, label }) => {
           const active = location.pathname.startsWith(to)
           return (
-            <NavLink
-              key={to}
-              to={to}
-              className="flex flex-col items-center justify-center gap-0.5 w-16 hover:scale-105 transition-transform"
-            >
+            <NavLink key={to} to={to} className="flex flex-col items-center justify-center gap-1 w-20 group">
               <span
-                className={`material-symbols-outlined text-[26px] ${active ? 'material-symbols-filled' : ''}`}
-                style={{
-                  fontVariationSettings: active
-                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                  color: active ? '#096430' : '#404940',
-                  opacity: active ? 1 : 0.6,
-                }}
+                className={`flex items-center justify-center h-8 w-14 rounded-full transition-all duration-200 ${
+                  active ? 'bg-secondary-container text-primary' : 'text-on-surface-variant group-active:bg-surface-container'
+                }`}
               >
-                {icon}
+                <span
+                  className="material-symbols-outlined text-[24px]"
+                  style={{ fontVariationSettings: `'FILL' ${active ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24` }}
+                >
+                  {icon}
+                </span>
               </span>
               <span
-                className="font-headline font-bold text-[10px] uppercase tracking-wider"
-                style={{ color: active ? '#096430' : '#404940', opacity: active ? 1 : 0.6 }}
+                className={`text-[11px] tracking-wide transition-colors ${
+                  active ? 'text-primary font-bold' : 'text-on-surface-variant font-medium'
+                }`}
               >
                 {label}
               </span>

@@ -16,9 +16,15 @@ export const queryKeys = {
   },
 
   // Recipes
+  // Key hierarchy:
+  //   ['recipes', 'list']           — prefix: invalidates ALL list queries
+  //   ['recipes', 'list', filters]  — specific list query (with/without filters)
+  //   ['recipes', 'detail', id]     — specific recipe detail
+  //   ['recipes', 'public', token]  — public share link
   recipes: {
-    all: (filters?: Record<string, string>) => ['recipes', filters] as const,
-    detail: (id: string) => ['recipes', id] as const,
+    lists: () => ['recipes', 'list'] as const,
+    all: (filters?: Record<string, string | undefined>) => ['recipes', 'list', filters] as const,
+    detail: (id: string) => ['recipes', 'detail', id] as const,
     public: (token: string) => ['recipes', 'public', token] as const,
   },
 

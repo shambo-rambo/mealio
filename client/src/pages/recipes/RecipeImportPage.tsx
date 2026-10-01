@@ -1,25 +1,59 @@
-import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { toast } from '../../components/shared/Toast'
 import { useImportRecipeMutation } from '../../hooks/useRecipes'
+import { getErrorMessage } from '../../lib/api'
+import { AI_RECIPE_PROMPT, parseRecipeJson } from '../../lib/recipeJson'
 
-type ImportTab = 'url' | 'text' | 'photo'
+type ImportTab = 'url' | 'text' | 'photo' | 'ai'
 
 export function RecipeImportPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { sharedUrl, autoImport } = (location.state ?? {}) as { sharedUrl?: string; autoImport?: boolean }
   const importRecipe = useImportRecipeMutation()
   const [tab, setTab] = useState<ImportTab>('url')
-  const [url, setUrl] = useState('')
+  const [url, setUrl] = useState(sharedUrl ?? '')
+  const isInstagram = /instagram\.com/i.test(url)
   const [text, setText] = useState('')
+  const [aiText, setAiText] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Auto-trigger import when arriving via the Web Share Target
+  useEffect(() => {
+    if (autoImport && sharedUrl && !isInstagram) {
+      handleImport('url', sharedUrl)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(AI_RECIPE_PROMPT)
+      toast.success('Prompt copied — paste it into your AI with your recipe')
+    } catch {
+      toast.error('Could not copy — long-press the prompt to copy it')
+    }
+  }
+
   const handleImport = async (type: ImportTab, payload: string, mediaType?: string) => {
+    // Food Prep-format JSON (from the AI tab or pasted text) imports instantly, no server AI call
+    if (type === 'ai' || type === 'text') {
+      const direct = parseRecipeJson(payload)
+      if (direct) {
+        navigate('/recipes/import/review', { state: { importResult: direct } })
+        return
+      }
+      if (type === 'ai') {
+        toast.error("That doesn't look like Food Prep recipe JSON — check the AI replied with JSON only")
+        return
+      }
+    }
     try {
       const result = await importRecipe.mutateAsync({ type, payload, mediaType })
-      navigate('/recipes/review', { state: { importResult: result } })
-    } catch {
-      toast.error('Import failed. Please check the URL or try again.')
+      navigate('/recipes/import/review', { state: { importResult: result } })
+    } catch (err) {
+      toast.error(getErrorMessage(err))
     }
   }
 
@@ -38,13 +72,14 @@ export function RecipeImportPage() {
     { id: 'url', icon: 'link', label: 'URL' },
     { id: 'photo', icon: 'photo_camera', label: 'Photo' },
     { id: 'text', icon: 'article', label: 'Paste' },
+    { id: 'ai', icon: 'auto_awesome', label: 'AI' },
   ]
 
   return (
     <div className="min-h-screen bg-surface">
       <TopBar title="Import recipe" showBack />
 
-      <div className="pt-20 px-6 mt-4">
+      <div className="pt-topbar px-6 mt-4">
         {/* Tab switcher */}
         <div className="flex bg-surface-container-low p-1.5 rounded-full mb-6">
           {tabs.map((t) => (
@@ -75,12 +110,18 @@ export function RecipeImportPage() {
                 autoFocus
               />
             </div>
-            <p className="text-xs text-on-surface-variant">
-              Paste any recipe URL. Claude will extract all the details automatically.
-            </p>
+            {isInstagram ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Instagram import is temporarily unavailable while we await approval from Meta. Try pasting the recipe text instead.
+              </p>
+            ) : (
+              <p className="text-xs text-on-surface-variant">
+                Paste any recipe URL. Claude will extract all the details automatically.
+              </p>
+            )}
             <button
               onClick={() => handleImport('url', url)}
-              disabled={!url.trim() || importRecipe.isPending}
+              disabled={!url.trim() || importRecipe.isPending || isInstagram}
               className="w-full py-3.5 rounded-full bg-primary text-on-primary font-headline font-bold shadow-fab disabled:opacity-50"
             >
               {importRecipe.isPending ? 'Importing…' : 'Import from URL'}
@@ -139,11 +180,47 @@ export function RecipeImportPage() {
           </div>
         )}
 
+        {/* AI tab */}
+        {tab === 'ai' && (
+          <div className="space-y-4">
+            <div className="bg-surface-container-low rounded-2xl p-4 space-y-3">
+              <p className="text-sm font-medium text-on-surface">1. Copy the prompt</p>
+              <p className="text-xs text-on-surface-variant">
+                Paste it into ChatGPT, Claude, Gemini, etc. followed by your recipe (or ask it to invent one). It replies with JSON Mealio can import perfectly.
+              </p>
+              <button
+                onClick={copyPrompt}
+                className="w-full py-3 rounded-full bg-secondary-container text-on-secondary-container font-headline font-bold flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                Copy AI prompt
+              </button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-on-surface mb-2">2. Paste the AI's reply</label>
+              <textarea
+                value={aiText}
+                onChange={(e) => setAiText(e.target.value)}
+                placeholder='{ "title": "…", "ingredients": [ … ] }'
+                rows={8}
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:border-primary resize-none font-mono text-xs"
+              />
+            </div>
+            <button
+              onClick={() => handleImport('ai', aiText)}
+              disabled={!aiText.trim()}
+              className="w-full py-3.5 rounded-full bg-primary text-on-primary font-headline font-bold shadow-fab disabled:opacity-50"
+            >
+              Import recipe
+            </button>
+          </div>
+        )}
+
         {/* Also create manually */}
         <div className="mt-8 text-center">
           <p className="text-sm text-on-surface-variant">
             Prefer to type it yourself?{' '}
-            <button onClick={() => navigate('/recipes/review', { state: { importResult: null } })}
+            <button onClick={() => navigate('/recipes/import/review', { state: { importResult: null } })}
               className="text-primary font-semibold">
               Create manually
             </button>

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
 import { Skeleton } from '../../components/shared/Skeleton'
 import { toast } from '../../components/shared/Toast'
+import { AddToListSheet } from '../../components/shared/AddToListSheet'
 import { useRecipeQuery, useRateRecipeMutation, useDeleteRecipeMutation, scaleIngredients } from '../../hooks/useRecipes'
 import { DIETARY_TAG_LABELS, type DietaryTag } from '../../types'
 import { api } from '../../lib/api'
@@ -11,7 +12,7 @@ import { api } from '../../lib/api'
 function StarRating({ current, onRate }: { current: number | null; onRate: (r: number) => void }) {
   const [hover, setHover] = useState(0)
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((s) => {
         const filled = s <= (hover || current || 0)
         return (
@@ -20,10 +21,10 @@ function StarRating({ current, onRate }: { current: number | null; onRate: (r: n
             onMouseEnter={() => setHover(s)}
             onMouseLeave={() => setHover(0)}
             onClick={() => onRate(s)}
-            className="p-0.5"
+            className="p-0"
           >
-            <span className="material-symbols-outlined text-[22px] text-yellow-400"
-              style={{ fontVariationSettings: filled ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" : "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}>
+            <span className="material-symbols-outlined text-[16px] text-yellow-400"
+              style={{ fontVariationSettings: filled ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" : "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20" }}>
               star
             </span>
           </button>
@@ -36,15 +37,21 @@ function StarRating({ current, onRate }: { current: number | null; onRate: (r: n
 export function RecipeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: recipe, isLoading } = useRecipeQuery(id ?? null)
+  const { data: recipe, isLoading, isError } = useRecipeQuery(id ?? null)
   const rateRecipe = useRateRecipeMutation(id!)
   const deleteRecipe = useDeleteRecipeMutation()
   const [servings, setServings] = useState<number | null>(null)
+  const [addToListOpen, setAddToListOpen] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
   const [scaleByIngredient, setScaleByIngredient] = useState(false)
+
+  useEffect(() => {
+    if (isError) navigate('/recipes', { replace: true })
+  }, [isError, navigate])
 
   const currentServings = servings ?? recipe?.servings ?? 1
   const scaledIngredients = recipe?.ingredients
@@ -83,6 +90,7 @@ export function RecipeDetailPage() {
   }
 
   const handleDelete = async () => {
+    setShowDelete(false)
     try {
       await deleteRecipe.mutateAsync(id!)
       navigate('/recipes', { replace: true })
@@ -96,7 +104,7 @@ export function RecipeDetailPage() {
     return (
       <div className="min-h-screen bg-surface pb-28">
         <TopBar title="" showBack />
-        <div className="pt-20 space-y-4 px-6 mt-4">
+        <div className="pt-topbar space-y-4 px-6 mt-4">
           <Skeleton className="h-52 w-full rounded-2xl" />
           <Skeleton className="h-6 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
@@ -104,6 +112,8 @@ export function RecipeDetailPage() {
       </div>
     )
   }
+
+  if (isError) return null
 
   if (!recipe) return null
 
@@ -118,27 +128,17 @@ export function RecipeDetailPage() {
   return (
     <div className="min-h-screen bg-surface pb-28">
       <TopBar
-        title={recipe.title}
+        title=""
         showBack
         right={
-          <div className="flex gap-2">
-            <button onClick={handleShare} disabled={sharing}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center disabled:opacity-50">
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">share</span>
-            </button>
-            <button onClick={() => navigate(`/recipes/${id}/edit`)}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">edit</span>
-            </button>
-            <button onClick={() => setShowDelete(true)}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-error">delete</span>
-            </button>
-          </div>
+          <button onClick={() => setShowMenu(true)} aria-label="More actions"
+            className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
+            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">more_vert</span>
+          </button>
         }
       />
 
-      <div className="pt-16">
+      <div className="pt-topbar-flush">
         {/* Hero image */}
         {recipe.pictureUrl ? (
           <img src={recipe.pictureUrl} alt={recipe.title} className="w-full h-56 object-cover" />
@@ -156,7 +156,7 @@ export function RecipeDetailPage() {
           <div>
             <h1 className="font-headline font-bold text-2xl text-on-surface">{recipe.title}</h1>
 
-            {/* Time chips */}
+            {/* Time chips + dietary tags on same row */}
             <div className="flex flex-wrap gap-2 mt-3">
               {recipe.prepTime && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-xs font-medium text-on-surface-variant">
@@ -176,35 +176,59 @@ export function RecipeDetailPage() {
                   Made {recipe.preparedCount}×
                 </span>
               )}
+              {recipe.dietaryTags && recipe.dietaryTags.map((tag) => (
+                <span key={tag} className={`px-2.5 py-1.5 rounded-full text-xs font-bold ${tagColors[tag as DietaryTag]}`}>
+                  {DIETARY_TAG_LABELS[tag as DietaryTag]}
+                </span>
+              ))}
             </div>
 
-            {/* Dietary tags */}
-            {recipe.dietaryTags && recipe.dietaryTags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {recipe.dietaryTags.map((tag) => (
-                  <span key={tag} className={`px-2.5 py-1 rounded-full text-xs font-bold ${tagColors[tag as DietaryTag]}`}>
-                    {DIETARY_TAG_LABELS[tag as DietaryTag]}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+            {/* Rating */}
+            <div className="flex items-center gap-2 mt-3">
+              <StarRating current={recipe.userRating ?? null} onRate={handleRate} />
+              {recipe.averageRating && (
+                <span className="text-xs text-on-surface-variant">{recipe.averageRating.toFixed(1)}</span>
+              )}
+            </div>
 
-          {/* Rating */}
-          <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-card">
-            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">Your rating</p>
-            <StarRating current={recipe.userRating ?? null} onRate={handleRate} />
-            {recipe.averageRating && (
-              <p className="text-xs text-on-surface-variant mt-2">
-                Family average: {recipe.averageRating.toFixed(1)} / 5
-              </p>
-            )}
+            {/* Primary + secondary actions */}
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => navigate(`/recipes/${id}/cook`)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-primary text-on-primary font-headline font-bold text-sm shadow-sm active:scale-[0.98] transition-transform"
+              >
+                <span className="material-symbols-outlined text-[20px]"
+                  style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
+                  cooking
+                </span>
+                Start cooking
+              </button>
+              <button
+                onClick={() => setAddToListOpen(true)}
+                aria-label="Add to shopping list"
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-surface-container text-primary font-headline font-bold text-sm active:scale-[0.98] transition-transform"
+              >
+                <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+                Add to list
+              </button>
+            </div>
           </div>
 
           {/* Servings scaler */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ingredients</p>
+            <div className="flex items-center justify-between mb-3 min-h-[2rem]">
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ingredients</p>
+                <button
+                  onClick={() => setScaleByIngredient((v) => !v)}
+                  aria-label="Scale by ingredient"
+                  aria-pressed={scaleByIngredient}
+                  title="Scale by ingredient"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${scaleByIngredient ? 'bg-primary text-on-primary' : 'text-on-surface-variant'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">tune</span>
+                </button>
+              </div>
               {!scaleByIngredient && (
                 <div className="flex items-center gap-3 bg-surface-container-low rounded-full px-1 py-1">
                   <button
@@ -213,7 +237,7 @@ export function RecipeDetailPage() {
                   >
                     <span className="material-symbols-outlined text-[16px] text-on-surface">remove</span>
                   </button>
-                  <span className="font-headline font-bold text-sm text-on-surface w-16 text-center">
+                  <span className="font-headline font-bold text-sm text-on-surface min-w-[5.5rem] text-center whitespace-nowrap">
                     {currentServings} {currentServings === 1 ? 'serving' : 'servings'}
                   </span>
                   <button
@@ -225,14 +249,6 @@ export function RecipeDetailPage() {
                 </div>
               )}
             </div>
-
-            <button
-              onClick={() => setScaleByIngredient((v) => !v)}
-              className={`mb-3 flex items-center gap-2 text-xs font-bold transition-colors ${scaleByIngredient ? 'text-primary' : 'text-on-surface-variant'}`}
-            >
-              <span className="material-symbols-outlined text-[16px]">tune</span>
-              Scale by ingredient
-            </button>
 
             <div className="bg-surface-container-lowest rounded-xl shadow-card overflow-hidden">
               {scaledIngredients.map((ing, i) => (
@@ -322,19 +338,25 @@ export function RecipeDetailPage() {
             </div>
           )}
 
-          {/* Cook mode */}
-          <button
-            onClick={() => navigate(`/recipes/${id}/cook`)}
-            className="w-full py-4 rounded-full bg-primary text-on-primary font-headline font-bold text-base shadow-fab flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined"
-              style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
-              cooking
-            </span>
-            Start cook mode
-          </button>
         </div>
       </div>
+
+      {/* Actions menu */}
+      <BottomSheet open={showMenu} onClose={() => setShowMenu(false)} title={recipe.title} size="sm">
+        <div className="pb-4 -mx-2">
+          {[
+            { icon: 'share', label: sharing ? 'Creating link…' : 'Share', onClick: () => { setShowMenu(false); handleShare() }, danger: false },
+            { icon: 'edit', label: 'Edit recipe', onClick: () => navigate(`/recipes/${id}/edit`), danger: false },
+            { icon: 'delete', label: 'Delete recipe', onClick: () => { setShowMenu(false); setShowDelete(true) }, danger: true },
+          ].map((a) => (
+            <button key={a.label} onClick={a.onClick}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl active:bg-surface-container text-left font-medium ${a.danger ? 'text-error' : 'text-on-surface'}`}>
+              <span className="material-symbols-outlined text-[22px]">{a.icon}</span>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
 
       {/* Share link */}
       <BottomSheet open={showShare} onClose={() => setShowShare(false)} title="Share recipe" size="sm">
@@ -371,6 +393,13 @@ export function RecipeDetailPage() {
           </div>
         </div>
       </BottomSheet>
+
+      <AddToListSheet
+        recipeId={id ?? null}
+        open={addToListOpen}
+        onClose={() => setAddToListOpen(false)}
+        defaultServings={currentServings}
+      />
     </div>
   )
 }

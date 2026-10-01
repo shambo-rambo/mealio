@@ -1,7 +1,13 @@
 import axios from 'axios'
 
+// In production VITE_API_URL = https://mealio-api.simon-hamblin.workers.dev
+// In local dev it is undefined and the Vite proxy rewrites /api → localhost:8787
+const apiBase = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1'
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: apiBase,
   headers: { 'Content-Type': 'application/json' },
 })
 

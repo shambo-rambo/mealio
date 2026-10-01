@@ -2,6 +2,24 @@ import { eq, and } from 'drizzle-orm'
 import { itemHistory } from '../db/schema.js'
 import type { AppDB } from '../db/index.js'
 
+/**
+ * Canonical key for "is this the same product?": case, spacing and simple plurals
+ * are ignored, so "Carrots", "carrot " and "carrots" are one item.
+ */
+export function normalizeItemName(name: string): string {
+  const n = name.toLowerCase().trim().replace(/\s+/g, ' ')
+  if (n.length <= 3 || /(ss|us)$/.test(n)) return n
+  if (/ies$/.test(n)) return n.replace(/ies$/, 'y')
+  if (/(oes|ches|shes|xes|sses)$/.test(n)) return n.replace(/es$/, '')
+  return n.replace(/s$/, '')
+}
+
+async function findHistory(db: AppDB, familyId: string, name: string) {
+  const key = normalizeItemName(name)
+  const all = await db.query.itemHistory.findMany({ where: eq(itemHistory.familyId, familyId) })
+  return all.find((h) => normalizeItemName(h.name) === key)
+}
+
 export async function upsertItemHistory(
   db: AppDB,
   familyId: string,
@@ -10,9 +28,7 @@ export async function upsertItemHistory(
   storeId: string | null,
 ) {
   const nameLower = name.toLowerCase().trim()
-  const existing = await db.query.itemHistory.findFirst({
-    where: and(eq(itemHistory.familyId, familyId), eq(itemHistory.nameLower, nameLower)),
-  })
+  const existing = await findHistory(db, familyId, name)
 
   if (existing) {
     await db.update(itemHistory).set({
@@ -30,16 +46,17 @@ export async function getItemSuggestions(db: AppDB, familyId: string, query: str
   const items = await db.query.itemHistory.findMany({
     where: eq(itemHistory.familyId, familyId),
     orderBy: (t, { desc }) => [desc(t.usageCount)],
-    limit: 20,
   })
   if (!query.trim()) return items
-  return items.filter((i) => i.nameLower.includes(query.toLowerCase().trim()))
+  return items.filter((i) => i.nameLower.includes(query.toLowerCase().trim())).slice(0, 20)
 }
 
 export async function getDefaultStoreForItem(db: AppDB, familyId: string, name: string) {
-  const nameLower = name.toLowerCase().trim()
-  const item = await db.query.itemHistory.findFirst({
-    where: and(eq(itemHistory.familyId, familyId), eq(itemHistory.nameLower, nameLower)),
-  })
+  const item = await findHistory(db, familyId, name)
   return item?.storeId ?? null
+}
+
+export async function getDefaultCategoryForItem(db: AppDB, familyId: string, name: string) {
+  const item = await findHistory(db, familyId, name)
+  return item?.category ?? null
 }

@@ -61,29 +61,35 @@ export default {
 
         'outline': '#707a6f',
         'outline-variant': '#bfc9bd',
+
+        // Named palette (for direct use)
+        'ink': '#1a1a1a',
+        'stone': '#d3d1c7',
+        'warm-gold': '#c8a96e',
       },
       borderRadius: {
-        DEFAULT: '0.25rem',
-        sm: '0.25rem',
-        md: '0.375rem',
-        lg: '0.5rem',
+        DEFAULT: '0.25rem',    // 4px — buttons
+        sm: '0.125rem',
+        md: '0.25rem',
+        lg: '0.5rem',          // 8px — cards, inputs
         xl: '0.75rem',
         '2xl': '1rem',
         '3xl': '1.5rem',
         full: '9999px',
       },
       fontFamily: {
-        headline: ['"Plus Jakarta Sans"', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
-        label: ['Inter', 'sans-serif'],
-        sans: ['Inter', 'sans-serif'],
+        headline: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        body: ['Inter', 'system-ui', 'sans-serif'],
+        label: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        card: '0px 12px 32px rgba(24,29,24,0.04)',
-        'card-md': '0px 8px 24px rgba(24,29,24,0.08)',
-        'nav-top': '0px 12px 32px rgba(24,29,24,0.04)',
-        'nav-bottom': '0px -12px 32px rgba(24,29,24,0.04)',
-        'fab': '0px 4px 12px rgba(9,100,48,0.25)',
+        card: '1px 2px 6px rgba(0,0,0,0.05)',
+        'card-md': '0px 8px 24px rgba(26,26,26,0.08)',
+        'nav-top': '0px 12px 32px rgba(26,26,26,0.04)',
+        'nav-bottom': '0px -4px 12px rgba(0,0,0,0.15)',
+        'fab': '0px 4px 12px rgba(26,26,26,0.25)',
       },
     },
   },

@@ -7,10 +7,11 @@ export type WsEvent =
 // Sends an event to all WebSocket clients connected under the given familyId.
 // The FamilyRoom Durable Object holds all connections for a family.
 export async function broadcastToFamily(
-  namespace: DurableObjectNamespace,
+  namespace: DurableObjectNamespace | undefined,
   familyId: string,
   event: WsEvent,
 ): Promise<void> {
+  if (!namespace) return // binding not available (e.g. local dev without DO)
   const id = namespace.idFromName(familyId)
   const room = namespace.get(id)
   // Fire-and-forget — don't block the response on the broadcast
