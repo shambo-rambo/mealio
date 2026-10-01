@@ -37,7 +37,7 @@ export function RecipeImportPage() {
   }
 
   const handleImport = async (type: ImportTab, payload: string, mediaType?: string) => {
-    // Mealio-format JSON (from the AI tab or pasted text) imports instantly, no server AI call
+    // Food Prep-format JSON (from the AI tab or pasted text) imports instantly, no server AI call
     if (type === 'ai' || type === 'text') {
       const direct = parseRecipeJson(payload)
       if (direct) {
@@ -45,7 +45,7 @@ export function RecipeImportPage() {
         return
       }
       if (type === 'ai') {
-        toast.error("That doesn't look like Mealio recipe JSON — check the AI replied with JSON only")
+        toast.error("That doesn't look like Food Prep recipe JSON — check the AI replied with JSON only")
         return
       }
     }
@@ -79,7 +79,7 @@ export function RecipeImportPage() {
     <div className="min-h-screen bg-surface">
       <TopBar title="Import recipe" showBack />
 
-      <div className="pt-20 px-6 mt-4">
+      <div className="pt-topbar px-6 mt-4">
         {/* Tab switcher */}
         <div className="flex bg-surface-container-low p-1.5 rounded-full mb-6">
           {tabs.map((t) => (

@@ -43,6 +43,7 @@ export function RecipeDetailPage() {
   const [servings, setServings] = useState<number | null>(null)
   const [addToListOpen, setAddToListOpen] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
@@ -103,7 +104,7 @@ export function RecipeDetailPage() {
     return (
       <div className="min-h-screen bg-surface pb-28">
         <TopBar title="" showBack />
-        <div className="pt-20 space-y-4 px-6 mt-4">
+        <div className="pt-topbar space-y-4 px-6 mt-4">
           <Skeleton className="h-52 w-full rounded-2xl" />
           <Skeleton className="h-6 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
@@ -127,27 +128,17 @@ export function RecipeDetailPage() {
   return (
     <div className="min-h-screen bg-surface pb-28">
       <TopBar
-        title={recipe.title}
+        title=""
         showBack
         right={
-          <div className="flex gap-2">
-            <button onClick={handleShare} disabled={sharing}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center disabled:opacity-50">
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">share</span>
-            </button>
-            <button onClick={() => navigate(`/recipes/${id}/edit`)}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">edit</span>
-            </button>
-            <button onClick={() => setShowDelete(true)}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-error">delete</span>
-            </button>
-          </div>
+          <button onClick={() => setShowMenu(true)} aria-label="More actions"
+            className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
+            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">more_vert</span>
+          </button>
         }
       />
 
-      <div className="pt-16">
+      <div className="pt-topbar-flush">
         {/* Hero image */}
         {recipe.pictureUrl ? (
           <img src={recipe.pictureUrl} alt={recipe.title} className="w-full h-56 object-cover" />
@@ -192,31 +183,52 @@ export function RecipeDetailPage() {
               ))}
             </div>
 
-            {/* Rating + Start cook mode — compact row */}
-            <div className="flex items-center justify-between mt-4 gap-3">
-              <div className="flex items-center gap-2">
-                <StarRating current={recipe.userRating ?? null} onRate={handleRate} />
-                {recipe.averageRating && (
-                  <span className="text-xs text-on-surface-variant">{recipe.averageRating.toFixed(1)}</span>
-                )}
-              </div>
+            {/* Rating */}
+            <div className="flex items-center gap-2 mt-3">
+              <StarRating current={recipe.userRating ?? null} onRate={handleRate} />
+              {recipe.averageRating && (
+                <span className="text-xs text-on-surface-variant">{recipe.averageRating.toFixed(1)}</span>
+              )}
+            </div>
+
+            {/* Primary + secondary actions */}
+            <div className="flex gap-2 mt-4">
               <button
                 onClick={() => navigate(`/recipes/${id}/cook`)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary font-headline font-bold text-sm shadow-sm"
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-primary text-on-primary font-headline font-bold text-sm shadow-sm active:scale-[0.98] transition-transform"
               >
-                <span className="material-symbols-outlined text-[18px]"
+                <span className="material-symbols-outlined text-[20px]"
                   style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
                   cooking
                 </span>
-                Start cook mode
+                Start cooking
+              </button>
+              <button
+                onClick={() => setAddToListOpen(true)}
+                aria-label="Add to shopping list"
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-surface-container text-primary font-headline font-bold text-sm active:scale-[0.98] transition-transform"
+              >
+                <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+                Add to list
               </button>
             </div>
           </div>
 
           {/* Servings scaler */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ingredients</p>
+            <div className="flex items-center justify-between mb-3 min-h-[2rem]">
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ingredients</p>
+                <button
+                  onClick={() => setScaleByIngredient((v) => !v)}
+                  aria-label="Scale by ingredient"
+                  aria-pressed={scaleByIngredient}
+                  title="Scale by ingredient"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${scaleByIngredient ? 'bg-primary text-on-primary' : 'text-on-surface-variant'}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">tune</span>
+                </button>
+              </div>
               {!scaleByIngredient && (
                 <div className="flex items-center gap-3 bg-surface-container-low rounded-full px-1 py-1">
                   <button
@@ -225,7 +237,7 @@ export function RecipeDetailPage() {
                   >
                     <span className="material-symbols-outlined text-[16px] text-on-surface">remove</span>
                   </button>
-                  <span className="font-headline font-bold text-sm text-on-surface w-16 text-center">
+                  <span className="font-headline font-bold text-sm text-on-surface min-w-[5.5rem] text-center whitespace-nowrap">
                     {currentServings} {currentServings === 1 ? 'serving' : 'servings'}
                   </span>
                   <button
@@ -237,22 +249,6 @@ export function RecipeDetailPage() {
                 </div>
               )}
             </div>
-
-            <button
-              onClick={() => setScaleByIngredient((v) => !v)}
-              className={`mb-3 flex items-center gap-2 text-xs font-bold transition-colors ${scaleByIngredient ? 'text-primary' : 'text-on-surface-variant'}`}
-            >
-              <span className="material-symbols-outlined text-[16px]">tune</span>
-              Scale by ingredient
-            </button>
-
-            <button
-              onClick={() => setAddToListOpen(true)}
-              className="mb-3 w-full flex items-center justify-center gap-2 py-3 rounded-full bg-secondary-container text-on-secondary-container font-headline font-bold text-sm active:scale-[0.99] transition-transform"
-            >
-              <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
-              Add to shopping list
-            </button>
 
             <div className="bg-surface-container-lowest rounded-xl shadow-card overflow-hidden">
               {scaledIngredients.map((ing, i) => (
@@ -344,6 +340,23 @@ export function RecipeDetailPage() {
 
         </div>
       </div>
+
+      {/* Actions menu */}
+      <BottomSheet open={showMenu} onClose={() => setShowMenu(false)} title={recipe.title} size="sm">
+        <div className="pb-4 -mx-2">
+          {[
+            { icon: 'share', label: sharing ? 'Creating link…' : 'Share', onClick: () => { setShowMenu(false); handleShare() }, danger: false },
+            { icon: 'edit', label: 'Edit recipe', onClick: () => navigate(`/recipes/${id}/edit`), danger: false },
+            { icon: 'delete', label: 'Delete recipe', onClick: () => { setShowMenu(false); setShowDelete(true) }, danger: true },
+          ].map((a) => (
+            <button key={a.label} onClick={a.onClick}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl active:bg-surface-container text-left font-medium ${a.danger ? 'text-error' : 'text-on-surface'}`}>
+              <span className="material-symbols-outlined text-[22px]">{a.icon}</span>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
 
       {/* Share link */}
       <BottomSheet open={showShare} onClose={() => setShowShare(false)} title="Share recipe" size="sm">

@@ -2,8 +2,8 @@ import type { RecipeImportResult } from '../types'
 
 const TAGS = ['vegetarian', 'vegan', 'gluten_free', 'dairy_free', 'nut_free'] as const
 
-/** Prompt users paste into any AI (ChatGPT, Claude, Gemini…) so its answer imports into Mealio perfectly. */
-export const AI_RECIPE_PROMPT = `I want to save a recipe in the Mealio app. Turn the recipe I give you (or the one we just discussed) into a single JSON object that follows this exact schema. Reply with ONLY the JSON inside one code block — no commentary.
+/** Prompt users paste into any AI (ChatGPT, Claude, Gemini…) so its answer imports into Food Prep perfectly. */
+export const AI_RECIPE_PROMPT = `I want to save a recipe in the Food Prep app. Turn the recipe I give you (or the one we just discussed) into a single JSON object that follows this exact schema. Reply with ONLY the JSON inside one code block — no commentary.
 
 {
   "title": string,
@@ -40,7 +40,7 @@ const num = (v: unknown): number | null => {
 }
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
 
-/** Returns a RecipeImportResult if `text` is (or contains) a Mealio recipe JSON object, else null. */
+/** Returns a RecipeImportResult if `text` is (or contains) a Food Prep recipe JSON object, else null. */
 export function parseRecipeJson(text: string): RecipeImportResult | null {
   const t = text.trim()
   const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/i)

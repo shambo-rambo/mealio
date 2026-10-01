@@ -54,7 +54,7 @@ export function ListsPage() {
         </button>
       } />
 
-      <main className="pt-20 px-6 mt-4">
+      <main className="pt-topbar px-6 mt-4">
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
@@ -93,7 +93,6 @@ export function ListsPage() {
                   >
                     <span className="material-symbols-outlined text-[18px] text-on-surface-variant">more_vert</span>
                   </button>
-                  <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
                 </div>
               </div>
             ))}

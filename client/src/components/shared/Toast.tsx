@@ -62,7 +62,7 @@ export function Toaster() {
   const { toasts, remove } = useToastStore()
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">
           <ToastItem toast={t} onRemove={() => remove(t.id)} />

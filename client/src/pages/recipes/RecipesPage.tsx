@@ -43,6 +43,7 @@ export function RecipesPage() {
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState<DietaryTag | null>(null)
   const [activeCollection, setActiveCollection] = useState<string | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
 
   const { data: recipes, isLoading } = useRecipesQuery({
     search: search || undefined,
@@ -50,6 +51,7 @@ export function RecipesPage() {
     collection: activeCollection ?? undefined,
   })
   const { data: collections = [] } = useCollectionsQuery()
+  const activeFilterCount = (activeTag ? 1 : 0) + (activeCollection ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-surface pb-28">
@@ -66,49 +68,58 @@ export function RecipesPage() {
         }
       />
 
-      <div className="pt-20 px-6 mt-2 space-y-3">
-        {/* Search */}
-        <div className="flex items-center gap-3 bg-surface-container-lowest rounded-2xl px-4 py-3 shadow-card border border-outline-variant/30">
-          <span className="material-symbols-outlined text-on-surface-variant text-[20px]">search</span>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search recipes…"
-            className="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/50 font-medium outline-none"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="material-symbols-outlined text-on-surface-variant text-[18px]">close</button>
-          )}
+      <div className="pt-topbar px-6 mt-2 space-y-3">
+        {/* Search + filter toggle */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-3 bg-surface-container-lowest rounded-2xl px-4 py-3 shadow-card border border-outline-variant/30">
+            <span className="material-symbols-outlined text-on-surface-variant text-[20px]">search</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search recipes…"
+              className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/50 font-medium outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} aria-label="Clear search" className="material-symbols-outlined text-on-surface-variant text-[18px]">close</button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            aria-label="Filters"
+            aria-pressed={showFilters}
+            className={`relative w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 border transition-colors ${
+              showFilters ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 shadow-card'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[22px]">tune</span>
+            {activeFilterCount > 0 && !showFilters && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-on-primary text-[11px] font-bold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Dietary tag chips */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {DIET_TAGS.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                activeTag === tag
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container text-on-surface-variant'
-              }`}
-            >
-              {DIETARY_TAG_LABELS[tag]}
-            </button>
-          ))}
-        </div>
-
-        {/* Collection pills */}
-        {collections.length > 0 && (
+        {/* Filters — hidden until asked for */}
+        {showFilters && (
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {DIET_TAGS.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  activeTag === tag ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+                }`}
+              >
+                {DIETARY_TAG_LABELS[tag]}
+              </button>
+            ))}
             {collections.map((col) => (
               <button
                 key={col.id}
                 onClick={() => setActiveCollection(activeCollection === col.id ? null : col.id)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                  activeCollection === col.id
-                    ? 'bg-secondary text-on-secondary'
-                    : 'bg-surface-container text-on-surface-variant'
+                  activeCollection === col.id ? 'bg-secondary text-on-secondary' : 'bg-surface-container text-on-surface-variant'
                 }`}
               >
                 {col.name}
@@ -126,7 +137,7 @@ export function RecipesPage() {
         ) : !recipes?.length ? (
           <EmptyState
             icon="restaurant_menu"
-            title={search || activeTag ? 'No recipes found' : 'No recipes yet'}
+            title={search || activeTag || activeCollection ? 'No recipes found' : 'No recipes yet'}
             description={
               search || activeTag
                 ? 'Try a different search or filter.'

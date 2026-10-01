@@ -71,6 +71,23 @@ export const shoppingItems = sqliteTable('shopping_items', {
   updatedAt: updatedAt(),
 })
 
+// One row per "reason this item is on the list": the usual buy, or a recipe that needs some.
+// Lines are listed, never blindly summed; `selected` lets the user opt lines in or out.
+export const itemLines = sqliteTable('item_lines', {
+  id: id(),
+  itemId: text('item_id')
+    .notNull()
+    .references(() => shoppingItems.id, { onDelete: 'cascade' }),
+  source: text('source', { enum: ['manual', 'recipe'] }).notNull().default('manual'),
+  sourceName: text('source_name'), // recipe title
+  recipeId: text('recipe_id'),
+  amount: text('amount').notNull().default(''), // display text, e.g. "1 kg", "2 carrots"
+  quantity: real('quantity'),
+  unit: text('unit'), // normalised: g, kg, ml, l ... or null for plain counts
+  selected: integer('selected', { mode: 'boolean' }).notNull().default(true),
+  createdAt: createdAt(),
+})
+
 export const recipes = sqliteTable('recipes', {
   id: id(),
   familyId: text('family_id')

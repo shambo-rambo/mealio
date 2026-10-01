@@ -71,7 +71,7 @@ export function QuickAddPage() {
 
       <p className="mt-8 text-xs text-on-surface-variant text-center">
         Powered by{' '}
-        <span className="font-bold text-primary">Cook</span>
+        <span className="font-bold text-primary">Food Prep</span>
       </p>
     </div>
   )

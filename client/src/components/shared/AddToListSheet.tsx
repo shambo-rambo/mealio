@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { BottomSheet } from './BottomSheet'
 import { toast } from './Toast'
 import { useRecipeQuery } from '../../hooks/useRecipes'
-import { useListsQuery, useAddItemMutation } from '../../hooks/useLists'
+import { useListsQuery, useAddItemMutation, useItemsQuery, usePantryHistoryQuery } from '../../hooks/useLists'
+import { ingredientStatuses, STATUS_LABEL } from '../../lib/itemMatch'
+import { describeNeed, normalizeUnit } from '../../lib/amounts'
 import type { Ingredient } from '../../types'
 
 const fmtQty = (q: number) => String(Math.round(q * 10) / 10)
@@ -38,13 +40,22 @@ export function AddToListSheet({
     }
   }, [open, recipeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Pre-select everything once the ingredients load
-  useEffect(() => {
-    if (open && ingredients.length > 0) setSelected(new Set(ingredients.map((_, i) => i)))
-  }, [open, recipe?.id, ingredients.length]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const effectiveListId = selectedListId || (lists.length === 1 ? lists[0].id : '')
   const addItem = useAddItemMutation(effectiveListId)
+  const { data: listItems } = useItemsQuery(effectiveListId || null)
+  const { data: pantry = [] } = usePantryHistoryQuery()
+  const statusOf = ingredientStatuses(listItems ?? [], pantry)
+  const statuses = ingredients.map((ing) => statusOf(ing.name))
+  const skipped = statuses.filter((s) => s !== 'new').length
+
+  // Pre-select only what you actually need to buy: not what's already on the
+  // list, and not what you already have in the pantry.
+  const listReady = !effectiveListId || !!listItems
+  useEffect(() => {
+    if (open && ingredients.length > 0 && listReady) {
+      setSelected(new Set(ingredients.flatMap((ing, i) => (statusOf(ing.name) === 'new' ? [i] : []))))
+    }
+  }, [open, recipe?.id, ingredients.length, effectiveListId, listReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const factor = servings / baseServings
   const scaled = (ing: Ingredient) => (ing.quantity != null ? Math.round(ing.quantity * factor * 10) / 10 : null)
@@ -62,7 +73,16 @@ export function AddToListSheet({
     setAdding(true)
     try {
       await Promise.all(
-        [...selected].map((i) => addItem.mutateAsync({ name: ingredients[i].name, quantity: scaled(ingredients[i]) })),
+        [...selected].map((i) => {
+          const ing = ingredients[i]
+          const qty = scaled(ing)
+          const unit = normalizeUnit(ing.unit)
+          // The recipe's amount is its own line on the item, never summed into another source's amount
+          return addItem.mutateAsync({
+            name: ing.name,
+            recipe: { id: recipe?.id ?? null, title: recipe?.title ?? 'Recipe', amount: describeNeed(ing.name, qty, unit), quantity: qty, unit },
+          })
+        }),
       )
       toast.success(`${selected.size} ingredient${selected.size === 1 ? '' : 's'} added`)
       onClose()
@@ -124,6 +144,11 @@ export function AddToListSheet({
               {allSelected ? 'Deselect all' : 'Select all'}
             </button>
           </div>
+          {skipped > 0 && (
+            <p className="text-xs text-on-surface-variant mb-2">
+              {skipped} already on your list or in your pantry {skipped === 1 ? 'is' : 'are'} left unticked. Tick one to add it anyway.
+            </p>
+          )}
           <div className="space-y-1 max-h-52 overflow-y-auto no-scrollbar">
             {ingredients.map((ing, i) => {
               const qty = scaled(ing)
@@ -142,6 +167,11 @@ export function AddToListSheet({
                     {qty != null ? `${fmtQty(qty)} ${ing.unit ?? ''}`.trim() : ing.unit ?? ''}
                   </span>
                   <span className="text-sm text-on-surface flex-1">{ing.name}</span>
+                  {STATUS_LABEL[statuses[i]] && (
+                    <span className={`text-[11px] font-bold flex-shrink-0 ${statuses[i] === 'on-list' ? 'text-primary' : 'text-on-surface-variant'}`}>
+                      {STATUS_LABEL[statuses[i]]}
+                    </span>
+                  )}
                 </button>
               )
             })}

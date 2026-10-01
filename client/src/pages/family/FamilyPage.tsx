@@ -253,7 +253,7 @@ export function FamilyPage() {
     <div className="min-h-screen bg-surface pb-28">
       <TopBar title="Family" showAvatar />
 
-      <div className="pt-20 px-4 mt-2 space-y-6">
+      <div className="pt-topbar px-4 mt-2 space-y-6">
 
         {/* Family name */}
         <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card">

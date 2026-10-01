@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQueryClient } from '@tanstack/react-query'
 import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
 import { EmptyState } from '../../components/shared/EmptyState'
@@ -10,15 +10,22 @@ import { BarcodeScanner } from '../../components/shared/BarcodeScanner'
 import {
   useItemsQuery, useListsQuery, useAddItemMutation, useToggleItemMutation,
   useUpdateItemMutation, useDeleteItemMutation, useItemSuggestions,
-  useStoresQuery, useCreateStoreMutation, usePantryHistoryQuery, useDeletePantryItemMutation,
+  useStoresQuery, useCreateStoreMutation, useItemLineMutations, usePantryHistoryQuery, useDeletePantryItemMutation,
 } from '../../hooks/useLists'
 import { useMealPlanQuery, getWeekDates } from '../../hooks/usePlanner'
 import { queryKeys } from '../../lib/queryKeys'
 import type { ShoppingItem, Store, ItemHistorySuggestion, Recipe } from '../../types'
 import { CATEGORIES } from '../../types'
 import { api } from '../../lib/api'
+import { normalizeItemName, ingredientStatuses, STATUS_LABEL } from '../../lib/itemMatch'
+import { describeNeed, normalizeUnit, summariseLines } from '../../lib/amounts'
 
 // ── Sortable item list ────────────────────────────────────────────────────────
+
+/** What to show next to an item's name: its ticked amounts, or the legacy package size. */
+function itemAmount(item: ShoppingItem): string {
+  return item.lines?.length ? summariseLines(item.lines) : (item.packageSize ?? '')
+}
 
 function sortByCategory(items: ShoppingItem[]): ShoppingItem[] {
   return [...items].sort((a, b) =>
@@ -126,8 +133,8 @@ function SortableItemList({
               <span className={`font-semibold text-on-surface ${item.checked ? 'line-through text-on-surface-variant/60' : ''}`}>
                 {item.name}
               </span>
-              {item.packageSize && (
-                <span className="text-sm text-on-surface-variant/50">{item.packageSize}</span>
+              {itemAmount(item) && (
+                <span className="text-sm text-on-surface-variant/60">{itemAmount(item)}</span>
               )}
             </div>
             {(item.note || item.price != null) && (
@@ -151,6 +158,110 @@ function SortableItemList({
   )
 }
 
+// ── Amounts ledger: the itemised "why is this on the list" behind an item ────
+
+function AmountsLedger({ listId, item }: { listId: string; item: ShoppingItem }) {
+  const lines = item.lines ?? []
+  const { add, update, remove } = useItemLineMutations(listId)
+  const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+  const summary = summariseLines(lines)
+  const hasCovered = lines.some((l) => !l.selected)
+
+  const submit = () => {
+    if (!draft.trim()) return
+    add.mutate({ itemId: item.id, amount: draft.trim() })
+    setDraft('')
+  }
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <label className="text-xs font-medium text-on-surface-variant">Amounts</label>
+        {summary && <span className="text-xs font-bold text-primary">Buying {summary}</span>}
+      </div>
+
+      {lines.length > 0 && (
+        <div className="rounded-xl border border-outline-variant/40 divide-y divide-outline-variant/20 overflow-hidden mb-2">
+          {lines.map((line) => (
+            <div key={line.id} className={`flex items-center gap-3 px-3 py-2.5 ${line.selected ? '' : 'bg-surface-container-low'}`}>
+              <button
+                onClick={() => update.mutate({ itemId: item.id, lineId: line.id, selected: !line.selected })}
+                aria-label={line.selected ? 'Leave this out' : 'Include this'}
+                aria-pressed={line.selected}
+                className="flex-shrink-0"
+              >
+                <span
+                  className={`material-symbols-outlined text-[22px] ${line.selected ? 'text-primary' : 'text-outline'}`}
+                  style={{ fontVariationSettings: line.selected ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+                >
+                  {line.selected ? 'check_box' : 'check_box_outline_blank'}
+                </span>
+              </button>
+              <div className="flex-1 min-w-0">
+                {editingId === line.id ? (
+                  <input
+                    autoFocus
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onBlur={() => {
+                      if (editText.trim() && editText.trim() !== line.amount) {
+                        update.mutate({ itemId: item.id, lineId: line.id, amount: editText.trim() })
+                      }
+                      setEditingId(null)
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                    className="w-full bg-transparent border-b border-primary text-sm font-semibold text-on-surface outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setEditingId(line.id); setEditText(line.amount) }}
+                    className={`text-sm font-semibold text-left ${line.selected ? 'text-on-surface' : 'text-on-surface-variant line-through'}`}
+                  >
+                    {line.amount || 'As needed'}
+                  </button>
+                )}
+                <p className="text-xs text-on-surface-variant truncate">
+                  {line.source === 'recipe' ? line.sourceName : 'Usual buy'}
+                  {!line.selected && line.source === 'recipe' && ' · probably covered'}
+                </p>
+              </div>
+              <button
+                onClick={() => remove.mutate({ itemId: item.id, lineId: line.id })}
+                aria-label="Remove this amount"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant active:bg-surface-container flex-shrink-0"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {hasCovered && (
+        <p className="text-xs text-on-surface-variant mb-2">Unticked amounts aren't counted. Tick one if you need to buy it as well.</p>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          placeholder={lines.length ? 'Add another amount, e.g. 500 g' : 'How much? e.g. 1 kg'}
+          className="flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface text-sm focus:outline-none focus:border-primary"
+        />
+        <button
+          onClick={submit}
+          disabled={!draft.trim() || add.isPending}
+          className="px-4 rounded-xl bg-primary text-on-primary text-sm font-bold disabled:opacity-40"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Item detail sheet ────────────────────────────────────────────────────────
 
 function ItemDetailSheet({
@@ -168,6 +279,7 @@ function ItemDetailSheet({
   const deleteItem = useDeleteItemMutation(listId)
   const [form, setForm] = useState<Partial<ShoppingItem>>({})
   const [uploading, setUploading] = useState(false)
+  const [showMore, setShowMore] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const openedIdRef = useRef<string | null>(null)
 
@@ -177,6 +289,7 @@ function ItemDetailSheet({
       // Different item opened — full reset
       openedIdRef.current = item.id
       setForm({ ...item })
+      setShowMore(!!(item.note || item.price != null || item.imageUrl))
     } else if (item.category && !form.category) {
       // AI category arrived while sheet is open — merge it in without resetting other fields
       setForm((f) => ({ ...f, category: item.category }))
@@ -200,7 +313,8 @@ function ItemDetailSheet({
   const save = async () => {
     if (!item) return
     try {
-      await updateItem.mutateAsync({ itemId: item.id, ...form })
+      const { lines: _lines, quantity: _q, packageSize: _p, ...fields } = form
+      await updateItem.mutateAsync({ itemId: item.id, ...fields })
       toast.success('Item updated')
       onClose()
     } catch {
@@ -220,29 +334,9 @@ function ItemDetailSheet({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-on-surface-variant mb-1">Quantity</label>
-            <input
-              type="number"
-              min={0}
-              step={0.5}
-              value={form.quantity ?? ''}
-              onChange={(e) => setForm({ ...form, quantity: e.target.value ? parseFloat(e.target.value) : null })}
-              className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-on-surface-variant mb-1">Package size</label>
-            <input
-              value={form.packageSize ?? ''}
-              onChange={(e) => setForm({ ...form, packageSize: e.target.value || null })}
-              placeholder="e.g. 500g"
-              className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
+        {item && <AmountsLedger listId={listId} item={item} />}
 
+        <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-on-surface-variant mb-1">Category</label>
           <select
@@ -267,6 +361,19 @@ function ItemDetailSheet({
           </select>
         </div>
 
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          aria-expanded={showMore}
+          className="w-full flex items-center justify-between text-sm font-bold text-on-surface-variant py-1"
+        >
+          More details
+          <span className="material-symbols-outlined text-[20px]">{showMore ? 'expand_less' : 'expand_more'}</span>
+        </button>
+        {showMore && (
+          <div className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-on-surface-variant mb-1">Note</label>
           <input
@@ -324,6 +431,9 @@ function ItemDetailSheet({
           )}
         </div>
 
+          </div>
+        )}
+
         <div className="flex gap-3">
           <button
             onClick={async () => {
@@ -380,9 +490,9 @@ function EyeToggle({ hidden, onToggle, label }: { hidden: boolean; onToggle: () 
   )
 }
 
-// ── Swipe-to-delete row ───────────────────────────────────────────────────────
+// ── Swipe row (left = delete, right = add to list) ───────────────────────────
 
-function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
+function SwipeRow({ onDelete, onAdd, children }: { onDelete: () => void; onAdd?: () => void; children: React.ReactNode }) {
   const REVEAL = 88
   const [dx, setDx] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -400,17 +510,30 @@ function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children:
     if (!locked.current && (Math.abs(mx) > 8 || Math.abs(my) > 8)) locked.current = Math.abs(mx) > Math.abs(my) ? 'h' : 'v'
     if (locked.current !== 'h') return
     setDragging(true)
-    setDx(Math.max(-REVEAL * 1.5, Math.min(0, start.current.base + mx)))
+    setDx(Math.max(-REVEAL * 1.5, Math.min(onAdd ? REVEAL * 1.5 : 0, start.current.base + mx)))
   }
   const onTouchEnd = () => {
     setDragging(false)
     if (dx < -REVEAL * 1.2) onDelete()
-    else setDx(dx < -REVEAL / 2 ? -REVEAL : 0)
+    else if (onAdd && dx > REVEAL * 1.2) { onAdd(); setDx(0) }
+    else if (dx < -REVEAL / 2) setDx(-REVEAL)
+    else if (onAdd && dx > REVEAL / 2) setDx(REVEAL)
+    else setDx(0)
     start.current = null
   }
 
   return (
     <div className="relative overflow-hidden">
+      {onAdd && (
+        <button
+          onClick={() => { onAdd(); setDx(0) }}
+          aria-label="Add to shopping list"
+          className="absolute inset-y-0 left-0 bg-primary text-on-primary flex items-center justify-center"
+          style={{ width: REVEAL }}
+        >
+          <span className="material-symbols-outlined">add_shopping_cart</span>
+        </button>
+      )}
       <button
         onClick={onDelete}
         aria-label="Delete from pantry"
@@ -443,14 +566,14 @@ function PantryView({
   currentItems: ShoppingItem[]
   onAdd: (name: string, category: string | null) => void
 }) {
-  const activeNames = new Set(currentItems.filter((i) => !i.checked).map((i) => i.name.toLowerCase()))
+  const activeNames = new Set(currentItems.filter((i) => !i.checked).map((i) => normalizeItemName(i.name)))
   const deletePantryItem = useDeletePantryItemMutation()
 
   if (historyItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
         <span className="material-symbols-outlined text-[48px] opacity-30">shelves</span>
-        <p className="text-sm">Your pantry is empty — add items to build your history.</p>
+        <p className="text-sm">Your pantry is empty. Items you tick off the shopping list land here.</p>
       </div>
     )
   }
@@ -471,27 +594,24 @@ function PantryView({
           <h2 className="text-on-surface-variant font-headline font-bold text-xs uppercase tracking-widest">{cat}</h2>
           <div className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-card divide-y divide-outline-variant/20">
             {groups[cat].map((item) => {
-              const onList = activeNames.has(item.name.toLowerCase())
+              const onList = activeNames.has(normalizeItemName(item.name))
               return (
-                <SwipeToDelete key={item.id} onDelete={() => deletePantryItem.mutate(item.id)}>
-                <button
-                  onClick={() => !onList && onAdd(item.name, item.category)}
-                  className={`w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors active:bg-surface-container ${onList ? 'cursor-default' : 'hover:bg-surface-container/40'}`}
+                <SwipeRow
+                  key={item.id}
+                  onDelete={() => deletePantryItem.mutate(item.id)}
+                  onAdd={onList ? undefined : () => onAdd(item.name, item.category)}
                 >
-                  <span
-                    className={`material-symbols-outlined text-[20px] flex-shrink-0 ${onList ? 'text-primary' : 'text-error'}`}
-                    style={{ fontVariationSettings: onList ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                  >
-                    {onList ? 'check_circle' : 'add_circle'}
-                  </span>
-                  <span className={`font-medium flex-1 ${onList ? 'text-on-surface' : 'text-error'}`}>{item.name}</span>
-                  {onList ? (
-                    <span className="text-xs text-primary font-medium">On list</span>
-                  ) : (
-                    <span className="text-xs text-on-surface-variant">Tap if finished</span>
-                  )}
-                </button>
-                </SwipeToDelete>
+                  <div className="w-full flex items-center gap-3 px-4 py-3">
+                    <span className={`font-medium flex-1 min-w-0 truncate ${onList ? 'text-on-surface-variant' : 'text-on-surface'}`}>{item.name}</span>
+                    {onList && (
+                      <span className="flex items-center gap-1 text-xs text-primary font-bold">
+                        <span className="material-symbols-outlined text-[16px]"
+                          style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>shopping_cart</span>
+                        On list
+                      </span>
+                    )}
+                  </div>
+                </SwipeRow>
               )
             })}
           </div>
@@ -535,7 +655,7 @@ function AddItemBar({ listId, onNewItem }: { listId: string; onNewItem: (item: S
         <BarcodeScanner onDetect={handleBarcodeScan} onClose={() => setShowScanner(false)} />
       )}
 
-      <div className="fixed bottom-20 left-0 w-full px-4 z-40">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-0 w-full px-4 z-40">
         {/* Autocomplete dropdown */}
         {showSuggestions && suggestions && suggestions.length > 0 && value.trim() && (
           <div className="mb-2 bg-surface-container-lowest rounded-2xl shadow-card-md overflow-hidden">
@@ -605,6 +725,8 @@ function ShopPlanView({ listId }: { listId: string }) {
 
   const { data: entries = [], isLoading: planLoading } = useMealPlanQuery(weekStart, weekEnd)
   const addItem = useAddItemMutation(listId)
+  const { data: listItems } = useItemsQuery(listId)
+  const { data: pantry = [] } = usePantryHistoryQuery()
   const [hideDeselected, toggleHideDeselected] = useHideDone('mealio-plan-hide-deselected')
 
   // Count how many times each unique recipe appears this week
@@ -663,9 +785,11 @@ function ShopPlanView({ listId }: { listId: string }) {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [lastLoadKey, setLastLoadKey] = useState('')
   const loadKey = `${weekOffset}|${isLoading ? '' : ingredients.map((i) => i.name).join(',')}`
-  if (!isLoading && loadKey !== lastLoadKey) {
+  const statusOf = ingredientStatuses(listItems ?? [], pantry)
+  // Only pre-select what needs buying: skip what's already on the list or in the pantry
+  if (!isLoading && listItems && loadKey !== lastLoadKey) {
     setLastLoadKey(loadKey)
-    setSelectedKeys(new Set(ingredients.map(ingKey)))
+    setSelectedKeys(new Set(ingredients.filter((i) => statusOf(i.name) === 'new').map(ingKey)))
   }
 
   const [adding, setAdding] = useState(false)
@@ -690,7 +814,15 @@ function ShopPlanView({ listId }: { listId: string }) {
     setAdding(true)
     try {
       await Promise.all(
-        toAdd.map((ing) => addItem.mutateAsync({ name: ing.name, quantity: ing.totalQty }))
+        toAdd.map((ing) => addItem.mutateAsync({
+          name: ing.name,
+          recipe: {
+            title: ing.sources.join(', '),
+            amount: describeNeed(ing.name, ing.totalQty, normalizeUnit(ing.unit)),
+            quantity: ing.totalQty,
+            unit: normalizeUnit(ing.unit),
+          },
+        }))
       )
       toast.success(`${toAdd.length} item${toAdd.length !== 1 ? 's' : ''} added to list`)
       setSelectedKeys(new Set())
@@ -786,6 +918,11 @@ function ShopPlanView({ listId }: { listId: string }) {
                   <div className="flex-1 min-w-0">
                     <p className={`font-medium text-on-surface ${selected ? '' : 'line-through'}`}>{ing.name}</p>
                     <p className="text-xs text-on-surface-variant truncate mt-0.5">
+                      {STATUS_LABEL[statusOf(ing.name)] && (
+                        <span className={`font-bold ${statusOf(ing.name) === 'on-list' ? 'text-primary' : ''}`}>
+                          {STATUS_LABEL[statusOf(ing.name)]} ·{' '}
+                        </span>
+                      )}
                       {ing.sources.join(', ')}
                     </p>
                   </div>
@@ -813,9 +950,17 @@ export function ListDetailPage() {
   const { id: listId } = useParams<{ id: string }>()
   const { data: items, isLoading } = useItemsQuery(listId ?? null)
   const { data: lists = [] } = useListsQuery()
-  const { data: stores = [] } = useStoresQuery()
+  const { data: stores = [], isSuccess: storesLoaded } = useStoresQuery()
   const { data: pantryHistory = [] } = usePantryHistoryQuery()
   const createStore = useCreateStoreMutation()
+  const qc = useQueryClient()
+  // One-off tidy: fold any duplicate rows (e.g. several "Carrots") into one
+  useEffect(() => {
+    if (!listId) return
+    api.post<{ removed: number }>(`/lists/${listId}/merge-duplicates`, {})
+      .then((r) => { if (r.data.removed > 0) qc.invalidateQueries({ queryKey: queryKeys.lists.items(listId) }) })
+      .catch(() => {})
+  }, [listId, qc])
   const listName = lists.find((l) => l.id === listId)?.name ?? 'Shopping List'
   const toggleItem = useToggleItemMutation(listId!)
   const addItem = useAddItemMutation(listId!)
@@ -878,75 +1023,70 @@ export function ListDetailPage() {
 
   return (
     <div className="min-h-screen bg-surface pb-40">
-      <TopBar title={listName} showAvatar />
+      <TopBar
+        title={listName}
+        showAvatar
+        right={
+          primaryTab === 'list' && storesLoaded && stores.length === 0 ? (
+            <button
+              onClick={() => setShowNewStore(true)}
+              aria-label="Add shop"
+              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant"
+            >
+              <span className="material-symbols-outlined text-[20px]">storefront</span>
+            </button>
+          ) : undefined
+        }
+      />
 
-      {/* Fixed nav container — holds both rows */}
-      <div className="fixed top-16 w-full z-40 bg-surface/80 backdrop-blur-sm">
+      {/* Fixed nav container */}
+      <div className="fixed top-[calc(4.25rem+env(safe-area-inset-top))] w-full z-40 bg-surface/90 backdrop-blur-sm border-b border-outline-variant/20">
 
-        {/* Nav 1: Shopping List · Shopping Plan · Pantry */}
-        <div className="px-6 pt-2 pb-1">
-          <div className="flex space-x-1 bg-surface-container-low p-1.5 rounded-full">
-            {([
-              { id: 'list', label: 'Shopping List' },
-              { id: 'plan', label: 'Shop Plan' },
-              { id: 'pantry', label: 'Pantry' },
-            ] as const).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleChangePrimary(tab.id)}
-                className={`flex-1 py-2 px-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all ${
-                  primaryTab === tab.id
-                    ? 'bg-primary text-on-primary shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-container'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        {/* Section tabs — quiet underline style */}
+        <div className="flex px-6" role="tablist">
+          {([
+            { id: 'list', label: 'List' },
+            { id: 'plan', label: 'From plan' },
+            { id: 'pantry', label: 'Pantry' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={primaryTab === tab.id}
+              onClick={() => handleChangePrimary(tab.id)}
+              className={`flex-1 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${
+                primaryTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-on-surface-variant'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Nav 2: store tabs — only when not on Pantry */}
-        {showStoreNav && (
-          <div className="px-6 pt-1 pb-2">
-            <div className="flex space-x-2 bg-surface-container-low p-1.5 rounded-full overflow-x-auto no-scrollbar items-center">
+        {/* Store filter — only when there is something to filter by */}
+        {showStoreNav && stores.length > 0 && (
+          <div className="px-6 py-2 flex gap-2 overflow-x-auto no-scrollbar items-center">
+            {[{ id: 'all', name: 'All' }, ...stores].map((store) => (
               <button
-                onClick={() => setStoreTab('all')}
+                key={store.id}
+                onClick={() => setStoreTab(store.id)}
                 className={`flex-shrink-0 py-1.5 px-3 rounded-full text-xs font-bold transition-all ${
-                  storeTab === 'all'
-                    ? 'bg-primary text-on-primary shadow-sm'
-                    : 'text-on-surface-variant hover:bg-surface-container'
+                  storeTab === store.id
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container text-on-surface-variant'
                 }`}
               >
-                All
+                {store.name}
               </button>
-              {stores.map((store) => (
-                <button
-                  key={store.id}
-                  onClick={() => setStoreTab(store.id)}
-                  className={`flex-shrink-0 py-1.5 px-3 rounded-full text-xs font-bold transition-all ${
-                    storeTab === store.id
-                      ? 'bg-primary text-on-primary shadow-sm'
-                      : 'text-on-surface-variant hover:bg-surface-container'
-                  }`}
-                >
-                  {store.name}
-                </button>
-              ))}
-              <button
-                onClick={() => setShowNewStore(true)}
-                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors ml-1"
-                title="Add shop"
-              >
-                <span className="material-symbols-outlined text-[16px]">add</span>
-              </button>
-            </div>
+            ))}
           </div>
         )}
       </div>
 
       {/* Main content — margin accounts for 1 or 2 nav rows */}
-      <main className={`px-6 space-y-8 ${showStoreNav ? 'mt-[190px]' : 'mt-[136px]'}`}>
+      <main className={`px-6 space-y-8 ${showStoreNav && stores.length > 0 ? 'mt-[calc(174px+env(safe-area-inset-top))]' : 'mt-[calc(130px+env(safe-area-inset-top))]'}`}>
         {primaryTab === 'pantry' ? (
           <PantryView
             historyItems={pantryHistory}
@@ -999,8 +1139,8 @@ export function ListDetailPage() {
                         <span className="font-semibold text-on-surface line-through text-on-surface-variant/60">
                           {item.name}
                         </span>
-                        {item.packageSize && (
-                          <span className="text-sm text-on-surface-variant/40">{item.packageSize}</span>
+                        {itemAmount(item) && (
+                          <span className="text-sm text-on-surface-variant/40">{itemAmount(item)}</span>
                         )}
                       </button>
                     </div>

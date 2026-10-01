@@ -6,9 +6,9 @@ export function PrivacyPage() {
 
       <section className="space-y-6 text-on-surface">
         <div>
-          <h2 className="text-lg font-semibold mb-2">What Cook is</h2>
+          <h2 className="text-lg font-semibold mb-2">What Food Prep is</h2>
           <p className="text-on-surface-variant leading-relaxed">
-            Cook is a family meal planning app. It helps you save recipes, plan your week, and
+            Food Prep is a family meal planning app. It helps you save recipes, plan your week, and
             manage shopping lists with your household.
           </p>
         </div>
@@ -26,7 +26,7 @@ export function PrivacyPage() {
         <div>
           <h2 className="text-lg font-semibold mb-2">How we use your information</h2>
           <ul className="list-disc list-inside space-y-1 text-on-surface-variant leading-relaxed">
-            <li>To provide and personalise the Cook service</li>
+            <li>To provide and personalise the Food Prep service</li>
             <li>To share data within your family group</li>
             <li>To send push notifications you have opted into</li>
             <li>To process recipe imports using AI (Anthropic Claude)</li>
@@ -36,7 +36,7 @@ export function PrivacyPage() {
         <div>
           <h2 className="text-lg font-semibold mb-2">Third-party services</h2>
           <p className="text-on-surface-variant leading-relaxed">
-            Cook uses the following third-party services:
+            Food Prep uses the following third-party services:
           </p>
           <ul className="list-disc list-inside space-y-1 text-on-surface-variant mt-2 leading-relaxed">
             <li><strong>Anthropic Claude</strong> — AI recipe parsing</li>

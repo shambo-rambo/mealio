@@ -5,7 +5,7 @@ export async function fetchTikTokData(url: string): Promise<VideoData> {
   let res: Response
   try {
     res = await fetch(endpoint, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Mealio/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FoodPrep/1.0)' },
       signal: AbortSignal.timeout(8_000),
     })
   } catch {

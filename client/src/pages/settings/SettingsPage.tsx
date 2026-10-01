@@ -53,7 +53,7 @@ export function SettingsPage() {
     <div className="min-h-screen bg-surface pb-28">
       <TopBar title="Account settings" showBack onBack={() => navigate(-1)} />
 
-      <div className="pt-20 px-4 mt-2 space-y-6">
+      <div className="pt-topbar px-4 mt-2 space-y-6">
 
         {/* Profile */}
         <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card space-y-4">
@@ -181,7 +181,7 @@ export function SettingsPage() {
 
         {/* App info */}
         <div className="text-center text-xs text-on-surface-variant py-4">
-          <p className="font-headline font-bold text-on-surface mb-1">Cook</p>
+          <p className="font-headline font-bold text-on-surface mb-1">Food Prep</p>
           <p>Version 1.0.0</p>
         </div>
       </div>

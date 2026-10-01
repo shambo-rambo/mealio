@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
+import { normalizeItemName } from '../lib/itemMatch'
 import type { ShoppingList, ShoppingItem, ItemHistorySuggestion } from '../types'
 
 // ── Lists ──────────────────────────────────────────────────────────────────
@@ -31,6 +32,15 @@ export function useDeleteListMutation() {
 
 // ── Items ──────────────────────────────────────────────────────────────────
 
+/** A recipe asking for some of an item. Recorded as its own line, never summed into the item. */
+export interface RecipeNeed {
+  id?: string | null
+  title: string
+  amount: string
+  quantity?: number | null
+  unit?: string | null
+}
+
 export function useItemsQuery(listId: string | null) {
   return useQuery({
     queryKey: queryKeys.lists.items(listId ?? ''),
@@ -43,11 +53,20 @@ export function useItemsQuery(listId: string | null) {
 export function useAddItemMutation(listId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Partial<ShoppingItem> & { name: string }) =>
+    mutationFn: (data: Partial<ShoppingItem> & { name: string; amount?: string | null; recipe?: RecipeNeed | null }) =>
       api.post<{ item: ShoppingItem }>(`/lists/${listId}/items`, data).then((r) => r.data.item),
     onMutate: async (newItem) => {
       await qc.cancelQueries({ queryKey: queryKeys.lists.items(listId) })
       const prev = qc.getQueryData<ShoppingItem[]>(queryKeys.lists.items(listId))
+      // Already have this product? Re-open it rather than showing a second row.
+      const key = normalizeItemName(newItem.name)
+      const match = prev?.find((i) => normalizeItemName(i.name) === key)
+      if (match) {
+        qc.setQueryData<ShoppingItem[]>(queryKeys.lists.items(listId), (old) =>
+          old?.map((i) => (i.id === match.id ? { ...i, checked: false } : i)) ?? [],
+        )
+        return { prev }
+      }
       const optimistic: ShoppingItem = {
         id: `temp_${Date.now()}`,
         listId,
@@ -113,6 +132,37 @@ export function useUpdateItemMutation(listId: string) {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(listId) })
     },
   })
+}
+
+/** Add / tick / edit / remove the itemised amounts behind one item. */
+export function useItemLineMutations(listId: string) {
+  const qc = useQueryClient()
+  const done = (item: ShoppingItem) =>
+    qc.setQueryData<ShoppingItem[]>(queryKeys.lists.items(listId), (old) => old?.map((i) => (i.id === item.id ? { ...i, ...item } : i)) ?? [])
+  const base = (itemId: string) => `/lists/${listId}/items/${itemId}/lines`
+  return {
+    add: useMutation({
+      mutationFn: ({ itemId, amount }: { itemId: string; amount: string }) =>
+        api.post<{ item: ShoppingItem }>(base(itemId), { amount }).then((r) => r.data.item),
+      onSuccess: done,
+    }),
+    update: useMutation({
+      mutationFn: ({ itemId, lineId, ...data }: { itemId: string; lineId: string; amount?: string; selected?: boolean }) =>
+        api.patch<{ item: ShoppingItem }>(`${base(itemId)}/${lineId}`, data).then((r) => r.data.item),
+      onMutate: async ({ itemId, lineId, selected }) => {
+        if (selected === undefined) return
+        qc.setQueryData<ShoppingItem[]>(queryKeys.lists.items(listId), (old) =>
+          old?.map((i) => i.id === itemId ? { ...i, lines: i.lines?.map((l) => (l.id === lineId ? { ...l, selected } : l)) } : i) ?? [])
+      },
+      onSuccess: done,
+      onError: () => qc.invalidateQueries({ queryKey: queryKeys.lists.items(listId) }),
+    }),
+    remove: useMutation({
+      mutationFn: ({ itemId, lineId }: { itemId: string; lineId: string }) =>
+        api.delete<{ item: ShoppingItem }>(`${base(itemId)}/${lineId}`).then((r) => r.data.item),
+      onSuccess: done,
+    }),
+  }
 }
 
 export function useDeleteItemMutation(listId: string) {

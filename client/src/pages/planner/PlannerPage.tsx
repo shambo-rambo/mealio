@@ -17,12 +17,6 @@ import { DAILY_DOZEN, classifyDay, type DailyDozenId } from '../../lib/dailyDoze
 import { usePrefsStore } from '../../store/prefsStore'
 import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult } from '../../types'
 
-const LABEL_COLORS: Record<MealLabel, string> = {
-  breakfast: 'bg-amber-100 text-amber-800',
-  lunch: 'bg-sky-100 text-sky-800',
-  dinner: 'bg-violet-100 text-violet-800',
-}
-const LABEL_SHORT: Record<MealLabel, string> = { breakfast: 'B', lunch: 'L', dinner: 'D' }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,192 +33,10 @@ function getMonthDates(year: number, month: number): (string | null)[] {
   return cells
 }
 
-// ── Meal chip (tiny badge on calendar cell) ───────────────────────────────────
-
-function MealChip({ entry }: { entry: MealPlanEntry }) {
-  return (
-    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${LABEL_COLORS[entry.mealLabel]}`}>
-      <span>{LABEL_SHORT[entry.mealLabel]}</span>
-      <span className="truncate max-w-[60px]">{entry.recipe?.title ?? entry.noteText ?? '–'}</span>
-    </div>
-  )
-}
-
 // ── Ingredient pull sheet ─────────────────────────────────────────────────────
 
 function IngredientPullSheet({ entry, onClose }: { entry: MealPlanEntry | null; onClose: () => void }) {
   return <AddToListSheet recipeId={entry?.recipeId ?? null} open={!!entry} onClose={onClose} />
-}
-
-// ── Delete scope modal ────────────────────────────────────────────────────────
-
-function DeleteScopeModal({
-  entry,
-  onClose,
-  onDeleted,
-}: {
-  entry: MealPlanEntry | null
-  onClose: () => void
-  onDeleted: () => void
-}) {
-  const deleteMeal = useDeleteMealMutation()
-  const [deleting, setDeleting] = useState(false)
-
-  const handleDelete = async (scope: 'one' | 'series') => {
-    if (!entry) return
-    setDeleting(true)
-    try {
-      await deleteMeal.mutateAsync({ id: entry.id, scope })
-      toast.success('Meal removed')
-      onDeleted()
-    } catch {
-      toast.error('Could not remove meal')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  if (!entry) return null
-
-  return (
-    <BottomSheet open={!!entry} onClose={onClose} title="Remove meal" size="sm">
-      <div className="space-y-3 pb-4">
-        <p className="text-sm text-on-surface-variant">
-          {entry.recipe?.title ?? entry.noteText ?? 'This meal'} is{' '}
-          {entry.isRecurring ? 'a recurring meal.' : 'a one-off meal.'}
-        </p>
-        {entry.isRecurring && (
-          <button
-            onClick={() => handleDelete('series')}
-            disabled={deleting}
-            className="w-full py-3 rounded-full bg-error/10 text-error font-headline font-bold disabled:opacity-50"
-          >
-            Remove this & all future
-          </button>
-        )}
-        <button
-          onClick={() => handleDelete('one')}
-          disabled={deleting}
-          className="w-full py-3 rounded-full bg-error text-on-error font-headline font-bold disabled:opacity-50"
-        >
-          {entry.isRecurring ? 'Remove this one only' : 'Remove'}
-        </button>
-        <button onClick={onClose} className="w-full py-3 rounded-full bg-surface-container text-on-surface font-headline font-bold">
-          Cancel
-        </button>
-      </div>
-    </BottomSheet>
-  )
-}
-
-// ── Day detail sheet ──────────────────────────────────────────────────────────
-
-function DayDetailSheet({
-  date,
-  entries,
-  onClose,
-  onAddMeal,
-  onPullIngredients,
-}: {
-  date: string | null
-  entries: MealPlanEntry[]
-  onClose: () => void
-  onAddMeal: (date: string) => void
-  onPullIngredients: (entry: MealPlanEntry) => void
-}) {
-  const updateMeal = useUpdateMealMutation()
-  const [deletingEntry, setDeletingEntry] = useState<MealPlanEntry | null>(null)
-  const [dayNote, setDayNote] = useState('')
-
-  // Sync day note from the first entry when the sheet opens for a new date
-  const firstEntry = entries[0]
-  const savedNote = firstEntry?.dayNote ?? ''
-  // Use useEffect-equivalent: track last seen date to reset local state
-  const [lastDate, setLastDate] = useState<string | null>(null)
-  if (date !== lastDate) {
-    setLastDate(date)
-    setDayNote(savedNote)
-  }
-
-  const saveDayNote = () => {
-    if (!firstEntry || dayNote === savedNote) return
-    updateMeal.mutate({ id: firstEntry.id, dayNote })
-  }
-
-  if (!date) return null
-  const d = new Date(`${date}T00:00:00`)
-  const dayName = d.toLocaleDateString('en-AU', { weekday: 'long', month: 'long', day: 'numeric' })
-
-  return (
-    <>
-      <BottomSheet open={!!date} onClose={onClose} title={dayName} size="lg">
-        <div className="space-y-3 pb-4">
-          {entries.length === 0 ? (
-            <p className="text-on-surface-variant text-sm text-center py-4">Nothing planned for this day.</p>
-          ) : (
-            entries.map((entry) => (
-              <div key={entry.id} className="flex items-center gap-3 bg-surface-container-low rounded-xl p-3">
-                <span className={`px-2 py-1 rounded-lg text-xs font-bold flex-shrink-0 ${LABEL_COLORS[entry.mealLabel]}`}>
-                  {entry.mealLabel.charAt(0).toUpperCase()}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-on-surface truncate">
-                    {entry.recipe?.title ?? entry.noteText ?? '–'}
-                  </p>
-                  {entry.isRecurring && (
-                    <p className="text-xs text-on-surface-variant">Recurring</p>
-                  )}
-                </div>
-                <div className="flex gap-1">
-                  {entry.recipeId && (
-                    <button
-                      onClick={() => onPullIngredients(entry)}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container"
-                      title="Add ingredients to shopping list"
-                    >
-                      <span className="material-symbols-outlined text-[18px] text-primary">shopping_cart</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setDeletingEntry(entry)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container"
-                  >
-                    <span className="material-symbols-outlined text-[18px] text-error">delete</span>
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-          {/* Day note */}
-          <div className="border-t border-outline-variant/30 pt-3">
-            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Day note</p>
-            <textarea
-              value={dayNote}
-              onChange={(e) => setDayNote(e.target.value)}
-              onBlur={saveDayNote}
-              placeholder={firstEntry ? "e.g. We're out tonight — just cook for the kids" : 'Add a meal first to enable day notes'}
-              disabled={!firstEntry}
-              rows={2}
-              className="w-full px-3 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface text-sm focus:outline-none focus:border-primary resize-none disabled:opacity-40"
-            />
-          </div>
-
-          <button
-            onClick={() => { onClose(); onAddMeal(date) }}
-            className="w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Add meal
-          </button>
-        </div>
-      </BottomSheet>
-      <DeleteScopeModal
-        entry={deletingEntry}
-        onClose={() => setDeletingEntry(null)}
-        onDeleted={() => setDeletingEntry(null)}
-      />
-    </>
-  )
 }
 
 // ── Day strip (horizontal scrollable week picker) ────────────────────────────
@@ -242,7 +54,7 @@ function DayStrip({
 }) {
   const today = toLocalIso()
   return (
-    <div className="flex gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+    <div className="flex gap-1 bg-surface-container-lowest rounded-3xl shadow-card px-2 py-3">
       {dates.map((date) => {
         const d = new Date(`${date}T00:00:00`)
         const isToday = date === today
@@ -256,14 +68,14 @@ function DayStrip({
           <button
             key={date}
             onClick={() => onSelect(date)}
-            className="flex flex-col items-center gap-1.5 min-w-[46px] py-1 flex-1"
+            className="flex flex-col items-center gap-2 py-1 flex-1"
           >
-            <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors ${
+            <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${
               isSelected ? 'text-primary' : 'text-on-surface-variant/50'
             }`}>
               {d.toLocaleDateString('en-AU', { weekday: 'short' })}
             </span>
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold transition-all ${
               isToday && isSelected
                 ? 'bg-primary text-on-primary shadow-md shadow-primary/25'
                 : isToday
@@ -300,109 +112,93 @@ const LABEL_TEXT_COLORS: Record<MealLabel, string> = {
   dinner:    'text-violet-600',
 }
 
-function EmptyMealSlot({ label, onClick }: { label: MealLabel; onClick: () => void }) {
+function AddSlotPill({ label, onClick }: { label: MealLabel; onClick: () => void }) {
   const meta = MEAL_SLOT_META[label]
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-dashed border-outline-variant/30 text-on-surface-variant hover:border-primary/30 hover:bg-primary/5 active:scale-[0.98] transition-all"
+      className="flex items-center gap-1.5 pl-2.5 pr-3.5 py-2 rounded-full border border-dashed border-outline-variant text-on-surface-variant text-sm font-semibold active:scale-95 transition-transform"
     >
-      <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-xl flex-shrink-0">
-        {meta.emoji}
-      </div>
-      <span className="text-sm font-medium flex-1 text-left">Add {meta.label}</span>
-      <span className="material-symbols-outlined text-[18px] opacity-40">add</span>
+      <span className="material-symbols-outlined text-[16px]">add</span>
+      {meta.label}
     </button>
   )
 }
 
-function MealEntryCard({
-  entry,
-  onEdit,
-  onPullIngredients,
-}: {
-  entry: MealPlanEntry
-  onEdit: () => void
-  onPullIngredients: () => void
-}) {
+function MealEntryCard({ entry, onEdit }: { entry: MealPlanEntry; onEdit: () => void }) {
   return (
-    <div
+    <button
       onClick={onEdit}
-      className="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-2xl shadow-card active:scale-[0.98] transition-transform cursor-pointer"
+      className="w-full text-left flex items-center gap-4 p-3.5 bg-surface-container-lowest rounded-2xl shadow-card active:scale-[0.98] transition-transform"
     >
       {entry.recipe?.pictureUrl ? (
-        <img
-          src={entry.recipe.pictureUrl}
-          alt=""
-          className="w-[56px] h-[50px] rounded-xl object-cover flex-shrink-0"
-        />
+        <img src={entry.recipe.pictureUrl} alt="" className="w-[56px] h-[50px] rounded-xl object-cover flex-shrink-0" />
       ) : (
         <div className="w-[56px] h-[50px] rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0 text-2xl">
           {MEAL_SLOT_META[entry.mealLabel].emoji}
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 ${LABEL_TEXT_COLORS[entry.mealLabel]}`}>
+        <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 flex items-center gap-1 ${LABEL_TEXT_COLORS[entry.mealLabel]}`}>
           {entry.mealLabel}
+          {entry.isRecurring && <span className="material-symbols-outlined text-[12px]" aria-label="Recurring">repeat</span>}
         </p>
         <p className="font-headline font-semibold text-on-surface text-sm truncate">
           {entry.recipe?.title ?? entry.noteText ?? '–'}
         </p>
-        {entry.isRecurring && (
-          <p className="text-[10px] text-on-surface-variant mt-0.5 flex items-center gap-0.5">
-            <span className="material-symbols-outlined text-[11px]">repeat</span>
-            Recurring
-          </p>
-        )}
       </div>
-      {entry.recipeId && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onPullIngredients() }}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors flex-shrink-0"
-        >
-          <span className="material-symbols-outlined text-[18px] text-primary">shopping_cart</span>
-        </button>
-      )}
-      <span className="material-symbols-outlined text-[18px] text-outline-variant flex-shrink-0">chevron_right</span>
-    </div>
+    </button>
   )
 }
 
-// ── Day agenda (inline, replaces bottom sheet in week view) ───────────────────
+// ── Day agenda ────────────────────────────────────────────────────────────────
+// Planned meals show as cards; slots that are still empty collapse into small
+// "+ Lunch" pills instead of three big dashed placeholders.
 
 function DayAgenda({
   entries,
   onAdd,
   onEdit,
-  onPullIngredients,
 }: {
   entries: MealPlanEntry[]
-  onAdd: (label: MealLabel) => void
+  onAdd: (label?: MealLabel) => void
   onEdit: (entry: MealPlanEntry) => void
-  onPullIngredients: (entry: MealPlanEntry) => void
 }) {
   const mealSlots: MealLabel[] = ['breakfast', 'lunch', 'dinner']
+  const order = (e: MealPlanEntry) => mealSlots.indexOf(e.mealLabel)
+  const sorted = [...entries].sort((a, b) => order(a) - order(b))
+  const emptySlots = mealSlots.filter((slot) => !entries.some((e) => e.mealLabel === slot))
+
   return (
-    <div className="space-y-2.5">
-      {mealSlots.map((slot) => {
-        const slotEntries = entries.filter((e) => e.mealLabel === slot)
-        return (
-          <div key={slot} className="space-y-2">
-            {slotEntries.length === 0 ? (
-              <EmptyMealSlot label={slot} onClick={() => onAdd(slot)} />
-            ) : (
-              slotEntries.map((entry) => (
-                <MealEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  onEdit={() => onEdit(entry)}
-                  onPullIngredients={() => onPullIngredients(entry)}
-                />
-              ))
-            )}
-          </div>
-        )
-      })}
+    <div className="space-y-4">
+      {sorted.length === 0 && (
+        <p className="text-sm text-on-surface-variant">Nothing planned yet — what's on the menu?</p>
+      )}
+      {sorted.length > 0 && (
+        <div className="space-y-3">
+          {sorted.map((entry) => (
+            <MealEntryCard key={entry.id} entry={entry} onEdit={() => onEdit(entry)} />
+          ))}
+        </div>
+      )}
+      {emptySlots.length === 0 && (
+        <div className="flex">
+          <button
+            onClick={() => onAdd()}
+            className="flex items-center gap-1.5 pl-2.5 pr-3.5 py-2 rounded-full border border-dashed border-outline-variant text-on-surface-variant text-sm font-semibold"
+          >
+            <span className="material-symbols-outlined text-[16px]">add</span>
+            Add another
+          </button>
+        </div>
+      )}
+      {emptySlots.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {emptySlots.map((slot) => (
+            <AddSlotPill key={slot} label={slot} onClick={() => onAdd(slot)} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -465,13 +261,45 @@ function RecurrenceEditor({
   )
 }
 
-// ── Add meal sheet ────────────────────────────────────────────────────────────
-
-const MEAL_LABEL_META: Record<MealLabel, { icon: string; color: string; active: string }> = {
-  breakfast: { icon: '☀️', color: 'bg-surface-container text-amber-700', active: 'bg-amber-100 text-amber-800 ring-2 ring-amber-400' },
-  lunch:     { icon: '🥗', color: 'bg-surface-container text-sky-700',   active: 'bg-sky-100 text-sky-800 ring-2 ring-sky-400' },
-  dinner:    { icon: '🍽️', color: 'bg-surface-container text-violet-700', active: 'bg-violet-100 text-violet-800 ring-2 ring-violet-400' },
+function RepeatPicker({
+  on, label, repeat, advanced, rule, onToggle, onRepeat, onAdvanced, onRule,
+}: {
+  on: boolean
+  label: string
+  repeat: SimpleRepeat
+  advanced: boolean
+  rule: RecurrenceRule
+  onToggle: () => void
+  onRepeat: (r: SimpleRepeat) => void
+  onAdvanced: () => void
+  onRule: (r: RecurrenceRule) => void
+}) {
+  const pill = (active: boolean) =>
+    `px-4 py-2 rounded-full text-sm font-bold transition-all ${active ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'}`
+  return (
+    <div className="space-y-2">
+      <button onClick={onToggle} className={`flex items-center gap-2 ${pill(on)}`}>
+        <span className="material-symbols-outlined text-[16px]">repeat</span>
+        {label}
+      </button>
+      {on && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            {(['weekly', 'daily'] as SimpleRepeat[]).map((r) => (
+              <button key={r} onClick={() => onRepeat(r)} className={pill(!advanced && repeat === r)}>
+                {r === 'weekly' ? 'Every week' : 'Every day'}
+              </button>
+            ))}
+            <button onClick={onAdvanced} className={pill(advanced)}>Custom</button>
+          </div>
+          {advanced && <RecurrenceEditor rule={rule} onChange={onRule} />}
+        </div>
+      )}
+    </div>
+  )
 }
+
+// ── Add meal sheet ────────────────────────────────────────────────────────────
 
 type SimpleRepeat = 'none' | 'daily' | 'weekly'
 
@@ -708,7 +536,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
   }
 
   return (
-    <BottomSheet open={!!date} onClose={onClose} title="Add meal" size="lg">
+    <BottomSheet open={!!date} onClose={onClose} title={`Add ${label}`} size="lg">
       <div className="space-y-4 pb-4">
 
         {/* Mode toggle — at top so content below stays consistent */}
@@ -726,26 +554,21 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
           ))}
         </div>
 
-        {/* Meal label — always visible, just below mode toggle */}
-        <div>
-          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Meal</p>
-          <div className="flex gap-2">
-            {(['breakfast', 'lunch', 'dinner'] as MealLabel[]).map((l) => {
-              const meta = MEAL_LABEL_META[l]
-              return (
-                <button
-                  key={l}
-                  onClick={() => setLabel(l)}
-                  className={`flex-1 flex flex-col items-center py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                    label === l ? meta.active : meta.color
-                  }`}
-                >
-                  <span className="text-lg mb-0.5">{meta.icon}</span>
-                  {l.charAt(0).toUpperCase() + l.slice(1)}
-                </button>
-              )
-            })}
-          </div>
+        {/* Meal label — compact single row */}
+        <div className="flex gap-2" role="radiogroup" aria-label="Meal">
+          {(['breakfast', 'lunch', 'dinner'] as MealLabel[]).map((l) => (
+            <button
+              key={l}
+              role="radio"
+              aria-checked={label === l}
+              onClick={() => setLabel(l)}
+              className={`flex-1 py-2 rounded-full text-sm font-bold transition-all ${
+                label === l ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+              }`}
+            >
+              {l.charAt(0).toUpperCase() + l.slice(1)}
+            </button>
+          ))}
         </div>
 
         {/* Content */}
@@ -759,7 +582,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
               placeholder="Search recipes…"
               className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
             />
-            <div className="space-y-2 max-h-40 overflow-y-auto no-scrollbar">
+            <div className="space-y-2 max-h-[34vh] overflow-y-auto no-scrollbar">
               {filtered.map((recipe) => (
                 <button
                   key={recipe.id}
@@ -791,41 +614,17 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
             {/* Action bar — appears after recipe is selected */}
             {selectedRecipe && (
               <div className="space-y-3 pt-1">
-                <button
-                  onClick={toggleRepeat}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                    showRepeat ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">repeat</span>
-                  {repeatLabel}
-                </button>
-                {showRepeat && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      {(['weekly', 'daily'] as SimpleRepeat[]).map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => { setRepeat(r); setShowAdvanced(false) }}
-                          className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                            !showAdvanced && repeat === r ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                          }`}
-                        >
-                          {r === 'weekly' ? 'Every week' : 'Every day'}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                          showAdvanced ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                        }`}
-                      >
-                        Custom
-                      </button>
-                    </div>
-                    {showAdvanced && <RecurrenceEditor rule={advancedRule} onChange={setAdvancedRule} />}
-                  </div>
-                )}
+<RepeatPicker
+                  on={showRepeat}
+                  label={repeatLabel}
+                  repeat={repeat}
+                  advanced={showAdvanced}
+                  rule={advancedRule}
+                  onToggle={toggleRepeat}
+                  onRepeat={(r) => { setRepeat(r); setShowAdvanced(false) }}
+                  onAdvanced={() => setShowAdvanced(!showAdvanced)}
+                  onRule={setAdvancedRule}
+                />
                 <button
                   onClick={() => handleAdd(selectedRecipe.id)}
                   disabled={addMeal.isPending}
@@ -847,41 +646,17 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
             />
             {noteText.trim() && (
               <div className="space-y-3">
-                <button
-                  onClick={toggleRepeat}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                    showRepeat ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px]">repeat</span>
-                  {repeatLabel}
-                </button>
-                {showRepeat && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      {(['weekly', 'daily'] as SimpleRepeat[]).map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => { setRepeat(r); setShowAdvanced(false) }}
-                          className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                            !showAdvanced && repeat === r ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                          }`}
-                        >
-                          {r === 'weekly' ? 'Every week' : 'Every day'}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                          showAdvanced ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                        }`}
-                      >
-                        Custom
-                      </button>
-                    </div>
-                    {showAdvanced && <RecurrenceEditor rule={advancedRule} onChange={setAdvancedRule} />}
-                  </div>
-                )}
+<RepeatPicker
+                  on={showRepeat}
+                  label={repeatLabel}
+                  repeat={repeat}
+                  advanced={showAdvanced}
+                  rule={advancedRule}
+                  onToggle={toggleRepeat}
+                  onRepeat={(r) => { setRepeat(r); setShowAdvanced(false) }}
+                  onAdvanced={() => setShowAdvanced(!showAdvanced)}
+                  onRule={setAdvancedRule}
+                />
               </div>
             )}
             <button
@@ -900,7 +675,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
 
 // ── Edit meal sheet ───────────────────────────────────────────────────────────
 
-function EditMealSheet({ entry, onClose }: { entry: MealPlanEntry | null; onClose: () => void }) {
+function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanEntry | null; onClose: () => void; onPullIngredients: (entry: MealPlanEntry) => void }) {
   const updateMeal = useUpdateMealMutation()
   const deleteMeal = useDeleteMealMutation()
   const [label, setLabel] = useState<MealLabel>('dinner')
@@ -976,21 +751,26 @@ function EditMealSheet({ entry, onClose }: { entry: MealPlanEntry | null; onClos
           </div>
         )}
 
+        {entry?.recipeId && (
+          <button
+            onClick={() => { onClose(); onPullIngredients(entry) }}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-surface-container text-primary font-headline font-bold text-sm"
+          >
+            <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+            Add ingredients to shopping list
+          </button>
+        )}
+
         {/* Meal label */}
-        <div>
-          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Meal</p>
-          <div className="flex gap-2">
-            {(['breakfast', 'lunch', 'dinner'] as MealLabel[]).map((l) => {
-              const meta = MEAL_LABEL_META[l]
-              return (
-                <button key={l} onClick={() => setLabel(l)}
-                  className={`flex-1 flex flex-col items-center py-2.5 rounded-2xl text-xs font-bold transition-all ${label === l ? meta.active : meta.color}`}>
-                  <span className="text-lg mb-0.5">{meta.icon}</span>
-                  {l.charAt(0).toUpperCase() + l.slice(1)}
-                </button>
-              )
-            })}
-          </div>
+        <div className="flex gap-2" role="radiogroup" aria-label="Meal">
+          {(['breakfast', 'lunch', 'dinner'] as MealLabel[]).map((l) => (
+            <button key={l} role="radio" aria-checked={label === l} onClick={() => setLabel(l)}
+              className={`flex-1 py-2 rounded-full text-sm font-bold transition-all ${
+                label === l ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+              }`}>
+              {l.charAt(0).toUpperCase() + l.slice(1)}
+            </button>
+          ))}
         </div>
 
         {/* Repeat */}
@@ -1055,11 +835,13 @@ function MonthView({
   year,
   month,
   byDate,
+  selected,
   onSelectDate,
 }: {
   year: number
   month: number
   byDate: Record<string, MealPlanEntry[]>
+  selected: string | null
   onSelectDate: (date: string) => void
 }) {
   const cells = getMonthDates(year, month)
@@ -1088,7 +870,7 @@ function MonthView({
               key={date}
               onClick={() => onSelectDate(date)}
               className={`flex flex-col items-center p-1 rounded-xl transition-colors min-h-[52px] ${
-                isToday ? 'bg-primary/10' : 'hover:bg-surface-container-low'
+                date === selected ? 'bg-primary/15 ring-1 ring-primary/40' : isToday ? 'bg-primary/10' : 'hover:bg-surface-container-low'
               }`}
             >
               <div className={`w-6 h-6 rounded-full flex items-center justify-center mb-0.5 ${
@@ -1119,11 +901,8 @@ function DailyDozenStrip({
   periodCategories: Set<DailyDozenId>  // categories hit anywhere in the current week/month
 }) {
   return (
-    <div className="mt-6 pt-5 border-t border-outline-variant/20">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-          Daily Dozen
-        </p>
+    <div>
+      <div className="flex items-center justify-end mb-3">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 text-[9px] text-on-surface-variant">
             <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Today
@@ -1190,7 +969,7 @@ function WeeklyDozenSummary({
   const totalDays = pastDates.length || 1
 
   return (
-    <div className="mt-8 pt-5 border-t border-outline-variant/20">
+    <div className="mt-6">
       <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3">
         Week Summary
       </p>
@@ -1238,6 +1017,82 @@ function WeeklyDozenSummary({
         })}
       </div>
     </div>
+  )
+}
+
+// ── Daily Dozen panel (collapsed by default) ─────────────────────────────────
+
+function DailyDozenPanel({
+  todayCategories,
+  periodCategories,
+  weekDates,
+  categoryByDate,
+}: {
+  todayCategories: Set<DailyDozenId>
+  periodCategories: Set<DailyDozenId>
+  weekDates?: string[]
+  categoryByDate: Record<string, Set<DailyDozenId>>
+}) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('mealio-dozen-open') === '1' } catch { return false }
+  })
+  const toggle = () =>
+    setOpen((o) => {
+      try { localStorage.setItem('mealio-dozen-open', o ? '0' : '1') } catch { /* private mode */ }
+      return !o
+    })
+
+  return (
+    <section className="mt-10 pt-2 border-t border-outline-variant/20">
+      <button
+        onClick={toggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between py-3 text-left"
+      >
+        <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+          Daily Dozen · {todayCategories.size}/{DAILY_DOZEN.length} today
+        </span>
+        <span className="material-symbols-outlined text-on-surface-variant text-[20px]">
+          {open ? 'expand_less' : 'expand_more'}
+        </span>
+      </button>
+      {open && (
+        <div className="pb-2">
+          <DailyDozenStrip todayCategories={todayCategories} periodCategories={periodCategories} />
+          {weekDates && <WeeklyDozenSummary weekDates={weekDates} categoryByDate={categoryByDate} />}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ── Selected day (shared by week and month views) ────────────────────────────
+
+function SelectedDay({
+  date,
+  entries,
+  onAdd,
+  onEdit,
+}: {
+  date: string
+  entries: MealPlanEntry[]
+  onAdd: (label?: MealLabel) => void
+  onEdit: (entry: MealPlanEntry) => void
+}) {
+  const isToday = date === toLocalIso()
+  const d = new Date(`${date}T00:00:00`)
+  return (
+    <>
+      <div className="mb-4">
+        <div>
+          {isToday && <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">Today</p>}
+          <h2 className="font-headline font-bold text-lg text-on-surface">
+            {d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </h2>
+        </div>
+      </div>
+      <DayAgenda entries={entries} onAdd={onAdd} onEdit={onEdit} />
+    </>
   )
 }
 
@@ -1319,151 +1174,76 @@ export function PlannerPage() {
   const goForward = () => view === 'week' ? setWeekOffset(weekOffset + 1) : setMonthOffset(monthOffset + 1)
   const goToday = () => { setWeekOffset(0); setMonthOffset(0); setSelectedDate(todayIso) }
 
+  const rangeLabel = view === 'week'
+    ? (() => {
+        const f = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+        return `${f(weekStart)} – ${f(weekEnd)}`
+      })()
+    : monthLabel
+  const atCurrent = view === 'week' ? weekOffset === 0 : monthOffset === 0
+
+  const openAdd = (date: string) => (label?: MealLabel) => { setAddingLabel(label); setAddingToDate(date) }
+
   return (
     <div className="min-h-screen bg-surface pb-28">
-      <TopBar
-        title="Meal Plan"
-        showAvatar
-        right={
-          <div className="flex gap-2">
-            <button onClick={goBack}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">chevron_left</span>
+      <TopBar title="Meal Plan" showAvatar />
+
+      <div className="pt-topbar px-4 mt-2">
+        {/* One quiet navigation row: prev · range · next   [Today] [view] */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-1">
+            <button onClick={goBack} aria-label="Previous"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant active:bg-surface-container">
+              <span className="material-symbols-outlined text-[22px]">chevron_left</span>
             </button>
-            <button onClick={goToday}
-              className="px-3 h-9 rounded-full bg-surface-container text-xs font-bold text-on-surface-variant">
-              Today
-            </button>
-            <button onClick={goForward}
-              className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">chevron_right</span>
+            <p className="font-headline font-bold text-on-surface min-w-[110px] text-center">{rangeLabel}</p>
+            <button onClick={goForward} aria-label="Next"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant active:bg-surface-container">
+              <span className="material-symbols-outlined text-[22px]">chevron_right</span>
             </button>
           </div>
-        }
-      />
-
-      <div className="pt-20 px-4 mt-2">
-        {/* Month label + view toggle */}
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">{monthLabel}</p>
-          <div className="flex bg-surface-container-low rounded-full p-0.5">
-            {(['week', 'month'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                  view === v ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant'
-                }`}
-              >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
+          <div className="flex items-center gap-1">
+            {(!atCurrent || selectedDate !== todayIso) && (
+              <button onClick={goToday} className="px-3 h-9 rounded-full text-sm font-bold text-primary active:bg-surface-container">
+                Today
               </button>
-            ))}
+            )}
+            <button
+              onClick={() => setView(view === 'week' ? 'month' : 'week')}
+              aria-label={view === 'week' ? 'Switch to month view' : 'Switch to week view'}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant active:bg-surface-container"
+            >
+              <span className="material-symbols-outlined text-[22px]">
+                {view === 'week' ? 'calendar_month' : 'view_week'}
+              </span>
+            </button>
           </div>
         </div>
 
         {view === 'week' ? (
-          <>
-            {/* Horizontal day strip */}
-            <DayStrip
-              dates={weekDates}
-              selected={selectedDate}
-              byDate={byDate}
-              onSelect={setSelectedDate}
+          <DayStrip dates={weekDates} selected={selectedDate} byDate={byDate} onSelect={setSelectedDate} />
+        ) : (
+          <MonthView year={year} month={month} byDate={byDate} selected={selectedDate} onSelectDate={setSelectedDate} />
+        )}
+
+        {selectedDate && (
+          <div className="mt-8">
+            <SelectedDay
+              date={selectedDate}
+              entries={byDate[selectedDate] ?? []}
+              onAdd={openAdd(selectedDate)}
+              onEdit={setEditingEntry}
             />
-
-            {/* Selected day agenda — always shown below strip */}
-            {selectedDate && (
-              <div className="mt-6">
-                {/* Day header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    {selectedDate === todayIso && (
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">Today</p>
-                    )}
-                    <h2 className="font-headline font-bold text-lg text-on-surface">
-                      {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </h2>
-                  </div>
-                  <button
-                    onClick={() => { setAddingLabel(undefined); setAddingToDate(selectedDate) }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-bold"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">add</span>
-                    Add meal
-                  </button>
-                </div>
-
-                <DayAgenda
-                  entries={byDate[selectedDate] ?? []}
-                  onAdd={(label) => { setAddingLabel(label); setAddingToDate(selectedDate) }}
-                  onEdit={(entry) => setEditingEntry(entry)}
-                  onPullIngredients={(entry) => setPullingEntry(entry)}
-                />
-
-                {dailyDozenEnabled && (
-                  <DailyDozenStrip
-                    todayCategories={categoryByDate[selectedDate] ?? new Set()}
-                    periodCategories={periodCategories}
-                  />
-                )}
-              </div>
-            )}
-
             {dailyDozenEnabled && (
-              <WeeklyDozenSummary
-                weekDates={weekDates}
+              <DailyDozenPanel
+                todayCategories={categoryByDate[selectedDate] ?? new Set()}
+                periodCategories={periodCategories}
+                weekDates={view === 'week' ? weekDates : undefined}
                 categoryByDate={categoryByDate}
               />
             )}
-          </>
-        ) : (
-          <>
-            {/* Month calendar — tap a date to see its agenda below */}
-            <MonthView
-              year={year}
-              month={month}
-              byDate={byDate}
-              onSelectDate={setSelectedDate}
-            />
-
-            {/* Inline day agenda for selected date in month view */}
-            {selectedDate && (
-              <div className="mt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    {selectedDate === todayIso && (
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">Today</p>
-                    )}
-                    <h2 className="font-headline font-bold text-lg text-on-surface">
-                      {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </h2>
-                  </div>
-                  <button
-                    onClick={() => { setAddingLabel(undefined); setAddingToDate(selectedDate) }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-bold"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">add</span>
-                    Add meal
-                  </button>
-                </div>
-                <DayAgenda
-                  entries={byDate[selectedDate] ?? []}
-                  onAdd={(label) => { setAddingLabel(label); setAddingToDate(selectedDate) }}
-                  onEdit={(entry) => setEditingEntry(entry)}
-                  onPullIngredients={(entry) => setPullingEntry(entry)}
-                />
-
-                {dailyDozenEnabled && (
-                  <DailyDozenStrip
-                    todayCategories={categoryByDate[selectedDate] ?? new Set()}
-                    periodCategories={periodCategories}
-                  />
-                )}
-              </div>
-            )}
-          </>
+          </div>
         )}
-
       </div>
 
       <AddMealSheet
@@ -1479,6 +1259,7 @@ export function PlannerPage() {
         key={editingEntry?.id}
         entry={editingEntry}
         onClose={() => setEditingEntry(null)}
+        onPullIngredients={setPullingEntry}
       />
     </div>
   )

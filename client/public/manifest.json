@@ -1,6 +1,6 @@
 {
-  "name": "Cook",
-  "short_name": "Cook",
+  "name": "Food Prep",
+  "short_name": "Food Prep",
   "description": "Smart shopping and meal planning for families",
   "start_url": "/",
   "display": "standalone",

@@ -69,7 +69,7 @@ export function RecipeReviewPage() {
     <div className="min-h-screen bg-surface pb-28">
       <TopBar title={importResult ? 'Review import' : 'New recipe'} showBack />
 
-      <div className="pt-20 px-6 mt-4 space-y-6">
+      <div className="pt-topbar px-6 mt-4 space-y-6">
         {/* Thumbnail */}
         {form.pictureUrl && (
           <section className="relative rounded-2xl overflow-hidden">

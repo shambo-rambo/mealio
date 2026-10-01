@@ -39,6 +39,19 @@ export interface ShoppingList {
   uncheckedCount?: number
 }
 
+/** One reason an item is on the list: the usual buy, or a recipe that needs some. */
+export interface ItemLine {
+  id: string
+  itemId: string
+  source: 'manual' | 'recipe'
+  sourceName: string | null
+  recipeId: string | null
+  amount: string
+  quantity: number | null
+  unit: string | null
+  selected: boolean
+}
+
 export interface ShoppingItem {
   id: string
   listId: string
@@ -54,6 +67,7 @@ export interface ShoppingItem {
   recipeSourceId: string | null
   createdBy: string | null
   updatedAt: string
+  lines?: ItemLine[]
 }
 
 export interface ItemHistorySuggestion {

@@ -38,7 +38,7 @@ export function StoresPage() {
     <div className="min-h-screen bg-surface pb-28">
       <TopBar title="Stores" showBack onBack={() => navigate(-1)} />
 
-      <div className="pt-20 px-4 mt-2 space-y-4">
+      <div className="pt-topbar px-4 mt-2 space-y-4">
         {/* Add store */}
         <div className="flex gap-2">
           <input

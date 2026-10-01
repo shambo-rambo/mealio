@@ -35,7 +35,7 @@ export function LoginPage() {
       <div className="text-center mb-10">
         <BrandMark />
         <h1 className="font-headline text-2xl text-on-surface">Welcome back</h1>
-        <p className="text-on-surface-variant text-sm mt-1">Sign in to your Cook account</p>
+        <p className="text-on-surface-variant text-sm mt-1">Sign in to your Food Prep account</p>
       </div>
 
       <form onSubmit={submit} className="space-y-4">

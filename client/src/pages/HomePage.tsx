@@ -17,7 +17,7 @@ export function HomePage() {
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-6 p-8">
       <div className="text-center">
         <BrandMark />
-        <h1 className="text-3xl font-headline font-bold text-on-surface">Cook</h1>
+        <h1 className="text-3xl font-headline font-bold text-on-surface">Food Prep</h1>
         <p className="mt-2 text-gray-500 text-sm">Smart shopping and meal planning for families</p>
       </div>
 

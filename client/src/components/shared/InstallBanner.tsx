@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -36,6 +37,7 @@ function isAndroidChrome() {
 }
 
 export function InstallBanner() {
+  const { pathname } = useLocation()
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [visible, setVisible] = useState(false)
   const [mode, setMode] = useState<'chrome-native' | 'chrome-manual' | 'ios' | null>(null)
@@ -81,10 +83,11 @@ export function InstallBanner() {
     setDeferredPrompt(null)
   }
 
-  if (!visible || !mode) return null
+  // Don't sit on top of the add-item bar or a sheet-heavy screen
+  if (!visible || !mode || pathname.startsWith('/shopping/')) return null
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-primary text-on-primary px-4 py-3 flex items-center gap-3 shadow-lg">
+    <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 bg-primary text-on-primary pl-4 pr-3 py-2.5 rounded-2xl flex items-center gap-3 shadow-card-md">
       <span
         className="material-symbols-outlined text-[22px] flex-shrink-0"
         style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
@@ -97,7 +100,7 @@ export function InstallBanner() {
           <>Tap <strong>Share</strong> <span className="material-symbols-outlined text-[13px] align-middle">ios_share</span> then <strong>"Add to Home Screen"</strong></>
         )}
         {mode === 'chrome-native' && (
-          <>Install <strong>Cook</strong> for the best experience</>
+          <>Install <strong>Food Prep</strong> for the best experience</>
         )}
         {mode === 'chrome-manual' && (
           <>Tap <strong>⋮</strong> then <strong>"Add to Home screen"</strong> to install</>

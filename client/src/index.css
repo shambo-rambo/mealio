@@ -48,6 +48,14 @@
     letter-spacing: -0.01em;
   }
 
+  /* Clear the fixed TopBar (4.25rem) plus the device notch / status bar */
+  .pt-topbar {
+    padding-top: calc(5rem + env(safe-area-inset-top));
+  }
+  .pt-topbar-flush {
+    padding-top: calc(4.25rem + env(safe-area-inset-top));
+  }
+
   /* Safe area padding */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
