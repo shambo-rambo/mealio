@@ -1,0 +1,40 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Type-check
+        run: |
+          npx tsc --noEmit -p client
+          npx tsc --noEmit -p server
+
+      # Server: Worker `mealio-api`. DB migrations stay manual (npm run db:migrate:prod in server/).
+      - name: Deploy server
+        run: npm run deploy
+
+      # Client: Pages project `mealio` (direct upload)
+      - name: Build client
+        run: npm run build --workspace=client
+        env:
+          VITE_API_URL: https://mealio-api.simon-hamblin.workers.dev
+      - name: Deploy client
+        run: npx wrangler pages deploy client/dist --project-name=mealio --branch=main
