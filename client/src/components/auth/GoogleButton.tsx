@@ -16,6 +16,7 @@ declare global {
 
 // google.accounts.id.initialize should run once per page; the callback reads the latest handlers.
 let initialized = false
+let endpoint = '/auth/google'
 const latest: { onSuccess: (d: AuthResponse) => void; onError: (m: string) => void } = { onSuccess: () => {}, onError: () => {} }
 
 let scriptPromise: Promise<void> | null = null
@@ -40,15 +41,19 @@ export type AuthResponse = { token: string; user: User; isNew?: boolean }
 /** Google's official "Sign in with Google" button; exchanges the ID token with our API. */
 export function GoogleButton({
   mode,
+  link,
   onSuccess,
   onError,
 }: {
   mode: 'signin' | 'signup'
+  /** Attach the chosen Google account to the signed-in user instead of signing in. */
+  link?: boolean
   onSuccess: (data: AuthResponse) => void
   onError: (message: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
+  endpoint = link ? '/auth/google/link' : '/auth/google'
   latest.onSuccess = onSuccess
   latest.onError = onError
 
@@ -66,7 +71,7 @@ export function GoogleButton({
             use_fedcm_for_button: true,
             callback: async ({ credential }: { credential: string }) => {
               try {
-                const { data } = await api.post<AuthResponse>('/auth/google', { credential })
+                const { data } = await api.post<AuthResponse>(endpoint, { credential })
                 latest.onSuccess(data)
               } catch (err) {
                 latest.onError(getErrorMessage(err))

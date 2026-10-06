@@ -151,6 +151,39 @@ authRoutes.post('/google', async (c) => {
   return c.json({ ...(await issueSession(user, c.env)), isNew })
 })
 
+// Attach a Google account to the signed-in user, even if its email differs from the account's.
+authRoutes.post('/google/link', authMiddleware, async (c) => {
+  const db = c.get('db')
+  const clientId = c.env?.GOOGLE_CLIENT_ID
+  if (!clientId) return c.json(err('not_configured', 'Google sign-in is not set up yet'), 501)
+  const { userId } = c.get('user')
+
+  const parsed = googleSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json(err('validation_error', 'Missing Google credential'), 400)
+
+  let profile
+  try {
+    profile = await verifyGoogleIdToken(parsed.data.credential, clientId)
+  } catch {
+    return c.json(err('invalid_google_token', 'Google sign-in failed. Please try again.'), 401)
+  }
+
+  const owner = await db.query.users.findFirst({ where: eq(users.googleId, profile.sub) })
+  if (owner && owner.id !== userId) {
+    // An empty, Google-only account with no family is the leftover of signing in with Google
+    // before connecting it. The caller just proved they own this Google identity, so drop it.
+    if (!owner.familyId && !owner.passwordHash) {
+      await db.delete(users).where(eq(users.id, owner.id))
+    } else {
+      return c.json(err('google_in_use', 'That Google account is already connected to a different Food Prep account.'), 409)
+    }
+  }
+  await db.update(users).set({ googleId: profile.sub }).where(eq(users.id, userId))
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
+  if (!user) return c.json(err('not_found', 'User not found'), 404)
+  return c.json(await issueSession(user, c.env))
+})
+
 authRoutes.post('/forgot-password', async (c) => {
   const db = c.get('db')
   const parsed = forgotSchema.safeParse(await c.req.json().catch(() => null))

@@ -5,6 +5,7 @@ import { toast } from '../../components/shared/Toast'
 import { useAuthStore } from '../../store/authStore'
 import { usePrefsStore } from '../../store/prefsStore'
 import { api, getErrorMessage } from '../../lib/api'
+import { GoogleButton } from '../../components/auth/GoogleButton'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 
 export function SettingsPage() {
@@ -92,11 +93,24 @@ export function SettingsPage() {
         <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card space-y-4">
           <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Security</p>
 
-          {user?.googleLinked && (
+          {user?.googleLinked ? (
             <p className="flex items-center gap-2 text-sm text-on-surface-variant">
               <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
               Google account connected
             </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-on-surface-variant">Connect Google to sign in with one tap, even if its email differs from this account's.</p>
+              <GoogleButton
+                mode="signin"
+                link
+                onSuccess={(d) => {
+                  updateUser(d.user)
+                  toast.success('Google account connected')
+                }}
+                onError={(m) => toast.error(m)}
+              />
+            </div>
           )}
 
           {hasPassword ? (
