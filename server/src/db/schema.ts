@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real, uniqueIndex, index } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 
 const id = () =>
@@ -23,15 +23,44 @@ export const families = sqliteTable('families', {
   createdAt: createdAt(),
 })
 
-export const users = sqliteTable('users', {
+export const users = sqliteTable(
+  'users',
+  {
   id: id(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
+  // Empty string for accounts that only ever signed in with Google (no password set).
   passwordHash: text('password_hash').notNull(),
+  googleId: text('google_id'),
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   avatar: text('avatar'),
   familyId: text('family_id').references(() => families.id, { onDelete: 'set null' }),
   role: text('role', { enum: ['owner', 'admin', 'member'] }).notNull().default('owner'),
   createdAt: createdAt(),
+  },
+  (t) => ({ googleIdIdx: uniqueIndex('users_google_id_idx').on(t.googleId) }),
+)
+
+export const passwordResets = sqliteTable(
+  'password_resets',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    usedAt: text('used_at'),
+    createdAt: createdAt(),
+  },
+  (t) => ({ tokenIdx: uniqueIndex('password_resets_token_idx').on(t.tokenHash), userIdx: index('password_resets_user_idx').on(t.userId) }),
+)
+
+// Fixed-window counters for throttling login / reset attempts (key = "<action>:<ip or email>").
+export const authAttempts = sqliteTable('auth_attempts', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull().default(0),
+  windowStart: integer('window_start').notNull(),
 })
 
 export const stores = sqliteTable('stores', {

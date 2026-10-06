@@ -1,13 +1,16 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute, AppLayout } from './components/layout/AppLayout'
 import { useAuthStore } from './store/authStore'
 import { useRealtime } from './hooks/useRealtime'
+import { api } from './lib/api'
 import { InstallBanner } from './components/shared/InstallBanner'
 
 // Auth
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })))
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })))
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })))
 
 // Family setup (post-register, no family yet)
 const FamilySetupPage = lazy(() => import('./pages/family/FamilySetupPage').then((m) => ({ default: m.FamilySetupPage })))
@@ -46,6 +49,12 @@ export default function App() {
   const token = useAuthStore((s) => s.token)
   useRealtime(token)
 
+  // Validate the stored session on launch and pick up server-side profile changes.
+  useEffect(() => {
+    if (!token) return
+    api.get('/auth/me').then(({ data }) => useAuthStore.getState().updateUser(data.user)).catch(() => {})
+  }, [token])
+
   return (
     <>
     <InstallBanner />
@@ -54,6 +63,8 @@ export default function App() {
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/join" element={<JoinPage />} />
         <Route path="/list/:id/quick-add" element={<QuickAddPage />} />
         <Route path="/r/:token" element={<PublicRecipePage />} />

@@ -15,6 +15,9 @@ export type Bindings = {
   VAPID_PRIVATE_KEY: string
   VAPID_EMAIL: string
   APP_URL: string
+  GOOGLE_CLIENT_ID?: string
+  RESEND_API_KEY?: string
+  EMAIL_FROM?: string
 }
 
 export interface VideoData {

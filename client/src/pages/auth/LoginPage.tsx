@@ -1,92 +1,92 @@
-import { BrandMark } from '../../components/shared/BrandMark'
 import { useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { api, getErrorMessage } from '../../lib/api'
 import { useAuthStore } from '../../store/authStore'
+import { useAuthSuccess } from '../../lib/useAuthSuccess'
+import { AuthShell, Divider, FormError, inputClass, labelClass, primaryButtonClass } from '../../components/auth/AuthShell'
+import { PasswordField } from '../../components/auth/PasswordField'
+import { GoogleButton, GOOGLE_CLIENT_ID } from '../../components/auth/GoogleButton'
 import type { User } from '../../types'
 
 export function LoginPage() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const setAuth = useAuthStore((s) => s.setAuth)
+  const { onAuthenticated, nextQuery } = useAuthSuccess()
+  const authed = useAuthStore((s) => !!s.token)
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  if (authed && !loading) return <Navigate to="/" replace />
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
     setError('')
     setLoading(true)
     try {
       const { data } = await api.post<{ token: string; user: User }>('/auth/login', form)
-      setAuth(data.token, data.user)
-      const next = searchParams.get('next')
-      navigate(next ?? (data.user.familyId ? '/shopping' : '/setup'), { replace: true })
+      onAuthenticated(data.token, data.user)
     } catch (err) {
       setError(getErrorMessage(err))
-    } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col justify-center px-6 py-12">
-      {/* Logo */}
-      <div className="text-center mb-10">
-        <BrandMark />
-        <h1 className="font-headline text-2xl text-on-surface">Welcome back</h1>
-        <p className="text-on-surface-variant text-sm mt-1">Sign in to your Food Prep account</p>
-      </div>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to your Food Prep account"
+      footer={
+        <>
+          New to Food Prep?{' '}
+          <Link to={`/register${nextQuery}`} className="text-primary font-semibold underline underline-offset-2">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      <GoogleButton mode="signin" onSuccess={(d) => onAuthenticated(d.token, d.user)} onError={setError} />
+      {GOOGLE_CLIENT_ID && <Divider label="or sign in with email" />}
 
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-4" noValidate={false}>
         <div>
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-widest mb-1.5">Email</label>
+          <label htmlFor="email" className={labelClass}>Email</label>
           <input
+            id="email"
+            name="email"
             type="email"
-            autoComplete="email"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoFocus
             required
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             placeholder="you@example.com"
-            className="w-full px-4 py-3 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm"
+            className={inputClass}
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-widest mb-1.5">Password</label>
-          <input
-            type="password"
-            autoComplete="current-password"
-            required
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder="••••••••"
-            className="w-full px-4 py-3 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm"
-          />
-        </div>
+        <PasswordField
+          value={form.password}
+          onChange={(password) => setForm({ ...form, password })}
+          autoComplete="current-password"
+          placeholder="Your password"
+          labelAside={
+            <Link
+              to={`/forgot-password${form.email ? `?email=${encodeURIComponent(form.email)}` : ''}`}
+              className="text-xs text-primary font-medium"
+            >
+              Forgot password?
+            </Link>
+          }
+        />
 
-        {error && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-error-container text-on-error-container text-sm">
-            <span className="material-symbols-outlined text-[18px]">error</span>
-            {error}
-          </div>
-        )}
+        <FormError message={error} />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-3.5 rounded bg-primary text-on-primary font-sans font-medium text-sm tracking-wide disabled:opacity-60 transition-opacity mt-2 hover:bg-primary-container"
-        >
-          {loading ? 'Signing in…' : 'Sign in →'}
+        <button type="submit" disabled={loading} className={primaryButtonClass}>
+          {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-
-      <p className="text-center text-sm text-on-surface-variant mt-8">
-        Don't have an account?{' '}
-        <Link to="/register" className="text-on-surface font-medium underline underline-offset-2">
-          Create one
-        </Link>
-      </p>
-    </div>
+    </AuthShell>
   )
 }

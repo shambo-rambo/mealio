@@ -9,6 +9,9 @@ export interface User {
   avatar: string | null
   familyId: string | null
   role: 'owner' | 'admin' | 'member'
+  emailVerified?: boolean
+  hasPassword?: boolean
+  googleLinked?: boolean
   createdAt: string
 }
 
