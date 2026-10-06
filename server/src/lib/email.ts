@@ -31,3 +31,17 @@ export function resetEmail(name: string, link: string) {
 <p style="color:#6b6b66;font-size:13px">If you didn't ask for this, ignore this email — your password won't change.</p></div>`,
   }
 }
+
+const esc = (s: string) => s.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c]!)
+
+export function inviteEmail(inviterName: string, familyName: string, link: string) {
+  return {
+    subject: `${inviterName} invited you to join ${familyName} on Food Prep`,
+    text: `${inviterName} invited you to join "${familyName}" on Food Prep, a shared space for meal plans, recipes and shopping lists.\n\nAccept the invitation (valid for 7 days):\n${link}\n\nIf you weren't expecting this, you can ignore this email.`,
+    html: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;padding:24px;color:#1b1c1a">
+<h2 style="margin:0 0 12px">You're invited</h2>
+<p><strong>${esc(inviterName)}</strong> invited you to join <strong>${esc(familyName)}</strong> on Food Prep, a shared space for meal plans, recipes and shopping lists.</p>
+<p style="margin:24px 0"><a href="${link}" style="background:#096430;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Accept invitation</a></p>
+<p style="color:#6b6b66;font-size:13px">This invitation is valid for 7 days. If you weren't expecting it, ignore this email.</p></div>`,
+  }
+}

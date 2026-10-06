@@ -5,7 +5,7 @@ import { TopBar } from '../../components/layout/TopBar'
 import { BottomSheet } from '../../components/shared/BottomSheet'
 import { toast } from '../../components/shared/Toast'
 import { useAuthStore } from '../../store/authStore'
-import { api } from '../../lib/api'
+import { api, getErrorMessage } from '../../lib/api'
 import type { FamilyMember } from '../../types'
 
 function useFamilyQuery() {
@@ -18,6 +18,20 @@ function useFamilyQuery() {
 function useInviteCodeMutation() {
   return useMutation({
     mutationFn: () => api.post<{ code: string; expiresAt: string }>('/family/invite').then((r) => r.data),
+  })
+}
+
+interface PendingInvite {
+  id: string
+  email: string
+  expiresAt: string
+}
+
+function usePendingInvitesQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: ['family-invites'],
+    enabled,
+    queryFn: () => api.get<{ invites: PendingInvite[] }>('/family/invites').then((r) => r.data.invites),
   })
 }
 
@@ -49,9 +63,62 @@ function useRenameFamilyMutation() {
 // ── Invite Sheet ──────────────────────────────────────────────────────────────
 
 function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient()
   const invite = useInviteCodeMutation()
+  const pending = usePendingInvitesQuery(open)
+  const [email, setEmail] = useState('')
+  const [sending, setSending] = useState(false)
+  const [fallbackLink, setFallbackLink] = useState<string | null>(null)
   const [code, setCode] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['family-invites'] })
+
+  const report = (data: { emailSent: boolean; link: string }, to: string) => {
+    if (data.emailSent) {
+      toast.success(`Invite sent to ${to}`)
+      setFallbackLink(null)
+    } else {
+      // Email couldn't be sent (e.g. not configured) - give the inviter the link to pass on.
+      setFallbackLink(data.link)
+      toast.error("Couldn't send the email. Copy the link below instead.")
+    }
+  }
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim() || sending) return
+    setSending(true)
+    try {
+      const { data } = await api.post<{ emailSent: boolean; link: string }>('/family/invites', { email: email.trim() })
+      report(data, email.trim())
+      setEmail('')
+      refresh()
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const resend = async (inv: PendingInvite) => {
+    try {
+      const { data } = await api.post<{ emailSent: boolean; link: string }>(`/family/invites/${inv.id}/resend`)
+      report(data, inv.email)
+      refresh()
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    }
+  }
+
+  const revoke = async (inv: PendingInvite) => {
+    try {
+      await api.delete(`/family/invites/${inv.id}`)
+      refresh()
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    }
+  }
 
   const generate = async () => {
     try {
@@ -66,43 +133,97 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   const handleClose = () => {
     setCode(null)
     setExpiresAt(null)
+    setFallbackLink(null)
+    setEmail('')
     onClose()
   }
 
   return (
     <BottomSheet open={open} onClose={handleClose} title="Invite to family" size="md">
-      <div className="space-y-4 pb-4">
-        {code ? (
-          <>
-            <p className="text-on-surface-variant text-sm text-center">Share this code with your family member</p>
-            <div className="bg-surface-container-low rounded-2xl p-6 text-center">
-              <p className="font-headline font-bold text-4xl tracking-[0.3em] text-primary">{code}</p>
+      <div className="space-y-5 pb-4">
+        <form onSubmit={send} className="space-y-3">
+          <label htmlFor="invite-email" className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+            Invite by email
+          </label>
+          <input
+            id="invite-email"
+            type="email"
+            inputMode="email"
+            autoComplete="off"
+            autoCapitalize="none"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-base"
+          />
+          <button
+            type="submit"
+            disabled={sending || !email.trim()}
+            className="w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold disabled:opacity-50"
+          >
+            {sending ? 'Sending…' : 'Send invite'}
+          </button>
+          <p className="text-xs text-on-surface-variant">They'll get an email with a link that's valid for 7 days. They can use any email address when they accept.</p>
+        </form>
+
+        {fallbackLink && (
+          <button
+            onClick={() => { navigator.clipboard.writeText(fallbackLink); toast.success('Link copied!') }}
+            className="w-full py-3 rounded-full bg-surface-container text-on-surface font-headline font-bold flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[18px]">link</span>
+            Copy invite link
+          </button>
+        )}
+
+        {!!pending.data?.length && (
+          <div>
+            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Pending</p>
+            <div className="rounded-2xl bg-surface-container-low divide-y divide-outline-variant/40">
+              {pending.data.map((inv) => (
+                <div key={inv.id} className="flex items-center gap-2 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-on-surface truncate">{inv.email}</p>
+                    <p className="text-xs text-on-surface-variant">
+                      Expires {new Date(inv.expiresAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                    </p>
+                  </div>
+                  <button onClick={() => resend(inv)} className="text-xs font-bold text-primary px-2 py-1">Resend</button>
+                  <button onClick={() => revoke(inv)} className="text-xs font-bold text-error px-2 py-1">Revoke</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-outline-variant/40 pt-4 space-y-3">
+          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Or share a code</p>
+          {code ? (
+            <div className="bg-surface-container-low rounded-2xl p-5 text-center">
+              <p className="font-headline font-bold text-3xl tracking-[0.3em] text-primary">{code}</p>
               {expiresAt && (
                 <p className="text-xs text-on-surface-variant mt-2">
                   Expires {new Date(expiresAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
+              <button
+                onClick={() => { navigator.clipboard.writeText(code); toast.success('Code copied!') }}
+                className="mt-3 text-sm font-bold text-primary"
+              >
+                Copy code
+              </button>
             </div>
-            <button
-              onClick={() => { navigator.clipboard.writeText(code); toast.success('Code copied!') }}
-              className="w-full py-3 rounded-full bg-surface-container text-on-surface font-headline font-bold flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">content_copy</span>
-              Copy code
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-on-surface-variant text-sm text-center">Generate a 6-digit code that your family member can enter to join.</p>
+          ) : (
             <button
               onClick={generate}
               disabled={invite.isPending}
-              className="w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold disabled:opacity-50"
+              className="w-full py-3 rounded-full bg-surface-container text-on-surface font-headline font-bold disabled:opacity-50"
             >
-              {invite.isPending ? 'Generating…' : 'Generate invite code'}
+              {invite.isPending ? 'Generating…' : 'Generate 6-digit code'}
             </button>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </BottomSheet>
   )

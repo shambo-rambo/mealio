@@ -257,3 +257,25 @@ export const inviteCodes = sqliteTable('invite_codes', {
   expiresAt: text('expires_at').notNull(),
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
 })
+
+// Email invitations: the emailed link carries a random token; only its hash is stored.
+export const familyInvites = sqliteTable(
+  'family_invites',
+  {
+    id: id(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    expiresAt: text('expires_at').notNull(),
+    acceptedAt: text('accepted_at'),
+    acceptedBy: text('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => ({
+    tokenIdx: uniqueIndex('family_invites_token_idx').on(t.tokenHash),
+    familyIdx: index('family_invites_family_idx').on(t.familyId),
+  }),
+)

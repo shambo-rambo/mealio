@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { api, getErrorMessage } from '../../lib/api'
 import { useAuthStore } from '../../store/authStore'
 import { useAuthSuccess } from '../../lib/useAuthSuccess'
@@ -10,8 +10,9 @@ import type { User } from '../../types'
 
 export function RegisterPage() {
   const { onAuthenticated, nextQuery } = useAuthSuccess()
+  const [params] = useSearchParams()
   const authed = useAuthStore((s) => !!s.token)
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: params.get('email') ?? '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
