@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { startWs, stopWs, onWsMessage } from '../lib/ws'
@@ -10,17 +10,25 @@ export function useRealtime(token: string | null) {
   const qc = useQueryClient()
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const navigate = useNavigate()
+  const hasFamily = useAuthStore((s) => !!s.user?.familyId)
+  // useNavigate's identity changes on every route change; keep it out of the effect deps
+  // so navigating doesn't tear down and reconnect the socket.
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
 
   useEffect(() => {
-    if (!token) return
+    // Accounts without a family have no room to join yet (the server closes with 4403).
+    if (!token || !hasFamily) return
 
     startWs(token)
 
     // ws:auth-failed is dispatched by ws.ts when the server closes the socket
     // with a 4401/4403 code — meaning the stored token is invalid or expired.
-    const onAuthFailed = () => {
+    const onAuthFailed = (e: Event) => {
+      // 4403 just means "no family yet" - not a reason to sign the user out.
+      if ((e as CustomEvent).detail?.code !== 4401) return
       clearAuth()
-      navigate('/login', { replace: true })
+      navigateRef.current('/login', { replace: true })
     }
     window.addEventListener('ws:auth-failed', onAuthFailed)
 
@@ -61,5 +69,5 @@ export function useRealtime(token: string | null) {
       unsub()
       stopWs()
     }
-  }, [token, qc, clearAuth, navigate])
+  }, [token, hasFamily, qc, clearAuth])
 }

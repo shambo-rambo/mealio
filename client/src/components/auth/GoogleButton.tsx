@@ -14,6 +14,10 @@ declare global {
   }
 }
 
+// google.accounts.id.initialize should run once per page; the callback reads the latest handlers.
+let initialized = false
+const latest: { onSuccess: (d: AuthResponse) => void; onError: (m: string) => void } = { onSuccess: () => {}, onError: () => {} }
+
 let scriptPromise: Promise<void> | null = null
 function loadGoogleScript(): Promise<void> {
   if (window.google?.accounts?.id) return Promise.resolve()
@@ -45,8 +49,8 @@ export function GoogleButton({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
-  const cbs = useRef({ onSuccess, onError })
-  cbs.current = { onSuccess, onError }
+  latest.onSuccess = onSuccess
+  latest.onError = onError
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return
@@ -54,19 +58,22 @@ export function GoogleButton({
     loadGoogleScript()
       .then(() => {
         if (cancelled || !ref.current || !window.google) return
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          ux_mode: 'popup',
-          use_fedcm_for_button: true,
-          callback: async ({ credential }: { credential: string }) => {
-            try {
-              const { data } = await api.post<AuthResponse>('/auth/google', { credential })
-              cbs.current.onSuccess(data)
-            } catch (err) {
-              cbs.current.onError(getErrorMessage(err))
-            }
-          },
-        })
+        if (!initialized) {
+          initialized = true
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            ux_mode: 'popup',
+            use_fedcm_for_button: true,
+            callback: async ({ credential }: { credential: string }) => {
+              try {
+                const { data } = await api.post<AuthResponse>('/auth/google', { credential })
+                latest.onSuccess(data)
+              } catch (err) {
+                latest.onError(getErrorMessage(err))
+              }
+            },
+          })
+        }
         const width = Math.min(ref.current.parentElement?.clientWidth ?? 320, 400)
         window.google.accounts.id.renderButton(ref.current, {
           type: 'standard',
