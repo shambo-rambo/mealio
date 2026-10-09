@@ -176,6 +176,9 @@ export function RecipesPage() {
                         .filter(Boolean).join(' · ')}
                     </p>
                   )}
+                  {recipe.calories != null && (
+                    <p className="text-xs text-on-surface-variant mt-0.5">{Math.round(recipe.calories)} kcal / serving</p>
+                  )}
                   <div className="mt-1.5">
                     <StarDisplay rating={recipe.averageRating ?? null} />
                   </div>

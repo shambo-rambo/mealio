@@ -4,7 +4,8 @@ import { TopBar } from '../../components/layout/TopBar'
 import { toast } from '../../components/shared/Toast'
 import { useAuthStore } from '../../store/authStore'
 import { usePrefsStore } from '../../store/prefsStore'
-import { api } from '../../lib/api'
+import { api, getErrorMessage } from '../../lib/api'
+import { GoogleButton } from '../../components/auth/GoogleButton'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
 
 export function SettingsPage() {
@@ -19,6 +20,8 @@ export function SettingsPage() {
   const [changingPassword, setChangingPassword] = useState(false)
   const { permission, subscribing, subscribe, unsubscribe } = usePushNotifications()
   const { dailyDozenEnabled, setDailyDozenEnabled } = usePrefsStore()
+
+  const hasPassword = user?.hasPassword !== false
 
   const handleSaveName = async () => {
     if (!name.trim() || name.trim() === user?.name) return
@@ -35,15 +38,16 @@ export function SettingsPage() {
   }
 
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword) return
+    if ((hasPassword && !currentPassword) || !newPassword) return
     setChangingPassword(true)
     try {
-      await api.post('/auth/change-password', { currentPassword, newPassword })
-      toast.success('Password changed')
+      await api.post('/auth/change-password', { currentPassword: hasPassword ? currentPassword : undefined, newPassword })
+      toast.success(hasPassword ? 'Password changed' : 'Password set')
+      updateUser({ hasPassword: true })
       setCurrentPassword('')
       setNewPassword('')
-    } catch {
-      toast.error('Could not change password — check your current password')
+    } catch (err) {
+      toast.error(getErrorMessage(err))
     } finally {
       setChangingPassword(false)
     }
@@ -89,20 +93,48 @@ export function SettingsPage() {
         <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card space-y-4">
           <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Security</p>
 
-          <div>
-            <label className="text-xs text-on-surface-variant font-medium">Current password</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="mt-1 w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-sm"
-            />
-          </div>
+          {user?.googleLinked ? (
+            <p className="flex items-center gap-2 text-sm text-on-surface-variant">
+              <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+              Google account connected
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-on-surface-variant">Connect Google to sign in with one tap, even if its email differs from this account's.</p>
+              <GoogleButton
+                mode="signin"
+                link
+                onSuccess={(d) => {
+                  updateUser(d.user)
+                  toast.success('Google account connected')
+                }}
+                onError={(m) => toast.error(m)}
+              />
+            </div>
+          )}
+
+          {hasPassword ? (
+            <div>
+              <label className="text-xs text-on-surface-variant font-medium">Current password</label>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="mt-1 w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-sm"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-on-surface-variant">You sign in with Google. Add a password to also sign in with your email.</p>
+          )}
 
           <div>
-            <label className="text-xs text-on-surface-variant font-medium">New password</label>
+            <label className="text-xs text-on-surface-variant font-medium">{hasPassword ? 'New password' : 'Password'} (8+ characters)</label>
             <input
               type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={72}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="mt-1 w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-sm"
@@ -111,10 +143,10 @@ export function SettingsPage() {
 
           <button
             onClick={handleChangePassword}
-            disabled={changingPassword || !currentPassword || !newPassword}
+            disabled={changingPassword || (hasPassword && !currentPassword) || newPassword.length < 8}
             className="w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold disabled:opacity-40"
           >
-            {changingPassword ? 'Changing…' : 'Change password'}
+            {changingPassword ? 'Saving…' : hasPassword ? 'Change password' : 'Set password'}
           </button>
         </div>
 

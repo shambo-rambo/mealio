@@ -9,7 +9,7 @@ import { authMiddleware } from '../middleware/auth.js'
 import {
   parseRecipeFromUrl, parseRecipeFromText, parseRecipeFromPhoto,
   parseRecipeFromSocialVideo,
-  generateNutrition, generateDietaryTags,
+  generateDietaryTags, estimateNutrition, withNutrition,
 } from '../lib/ai.js'
 import { detectPlatform } from '../lib/detect.js'
 import { fetchInstagramData } from '../lib/extractors/instagram.js'
@@ -89,9 +89,10 @@ recipesRoutes.get('/', async (c) => {
 
   const withMeta = await Promise.all(
     recipeList.map(async (recipe) => {
-      const [ratings, tags] = await Promise.all([
+      const [ratings, tags, nut] = await Promise.all([
         db.query.recipeRatings.findMany({ where: eq(recipeRatings.recipeId, recipe.id) }),
         db.query.dietaryTags.findMany({ where: eq(dietaryTags.recipeId, recipe.id) }),
+        db.query.nutrition.findFirst({ where: eq(nutrition.recipeId, recipe.id) }),
       ])
       const avg = ratings.length ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : null
       return {
@@ -99,6 +100,7 @@ recipesRoutes.get('/', async (c) => {
         averageRating: avg,
         userRating: ratings.find((r) => r.userId === userId)?.rating ?? null,
         dietaryTags: tags.map((t) => t.tag),
+        calories: nut?.calories ?? null,
       }
     })
   )
@@ -162,7 +164,18 @@ recipesRoutes.post('/', async (c) => {
   const result = recipeBodySchema.safeParse(body)
   if (!result.success) return c.json({ error: { code: 'validation_error', message: result.error.issues[0].message } }, 400)
 
-  const { ingredients: ings, steps, dietaryTags: tags, nutrition: nut, collectionIds, ...recipeData } = result.data
+  const { ingredients: ings, steps, dietaryTags: tags, nutrition: nutIn, collectionIds, ...recipeData } = result.data
+
+  // Backfill calories (pasted JSON, manual entry, etc.) when none were provided
+  let nut = nutIn
+  if (nut?.calories == null && ings?.length) {
+    const est = await estimateNutrition(
+      ings.map((i) => ({ name: i.name, quantity: i.quantity ?? null, unit: i.unit ?? null })),
+      recipeData.servings,
+      c.env.AI_GATEWAY_API_KEY,
+    )
+    if (est) nut = est
+  }
 
   const recipeId = crypto.randomUUID()
   await db.insert(recipes).values({ id: recipeId, familyId, createdBy: userId, ...recipeData })
@@ -320,7 +333,7 @@ recipesRoutes.post('/import', async (c) => {
     } else {
       parsed = await parseRecipeFromText(payload, anthropicKey)
     }
-    return c.json({ result: parsed })
+    return c.json({ result: await withNutrition(parsed, c.env.AI_GATEWAY_API_KEY) })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Import failed'
     if (msg === 'no_recipe_found') {

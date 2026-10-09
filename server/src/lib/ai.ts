@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { RecipeImportResult, VideoData } from '../types.js'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-haiku-4-5-20251001'
 
 const RECIPE_SYSTEM = `You are a recipe parsing assistant. Extract structured recipe data and return ONLY valid JSON matching this exact schema:
 {
@@ -16,6 +16,8 @@ const RECIPE_SYSTEM = `You are a recipe parsing assistant. Extract structured re
   "nutrition": { "calories": number | null, "protein": number | null, "carbs": number | null, "fat": number | null } | null
 }
 Times are in minutes.
+
+Nutrition: values are PER SERVING. Use the source's figures if given; otherwise estimate from the ingredients and servings. Always provide calories (kcal) — never null unless there are no ingredients.
 
 Ingredient extraction rules — follow these exactly:
 - Extract EVERY ingredient listed. Do not skip, merge, or omit any ingredient.
@@ -57,6 +59,8 @@ Extract the recipe and return ONLY valid JSON matching this exact schema:
   "nutrition": { "calories": number | null, "protein": number | null, "carbs": number | null, "fat": number | null } | null
 }
 Times are in minutes.
+
+Nutrition: values are PER SERVING. Use the source's figures if given; otherwise estimate from the ingredients and servings. Always provide calories (kcal) — never null unless there are no ingredients.
 
 Ingredient extraction rules — follow these exactly:
 - Extract EVERY ingredient listed. Do not skip, merge, or omit any ingredient.
@@ -424,33 +428,62 @@ export async function parseRecipeFromPhoto(base64Image: string, mediaType: strin
   return safeParseRecipe(out)
 }
 
-export async function generateNutrition(
+export type Nutrition = { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+
+// Cheap model via Vercel AI Gateway (OpenAI-compatible endpoint).
+const NUTRITION_MODEL = 'google/gemini-2.5-flash-lite'
+
+/** Estimate per-serving nutrition from ingredients. Returns null on any failure. */
+export async function estimateNutrition(
   ingredients: Array<{ name: string; quantity: number | null; unit: string | null }>,
   servings: number,
-  apiKey: string,
-): Promise<{ calories: number | null; protein: number | null; carbs: number | null; fat: number | null }> {
-  const client = new Anthropic({ apiKey })
+  gatewayKey: string | undefined,
+): Promise<Nutrition | null> {
+  if (!gatewayKey || ingredients.length === 0) return null
   const ingredientList = ingredients
     .map((i) => `${i.quantity ?? ''} ${i.unit ?? ''} ${i.name}`.trim())
     .join('\n')
 
-  const msg = await client.messages.create({
-    model: MODEL,
-    max_tokens: 256,
-    messages: [
-      {
-        role: 'user',
-        content: `Estimate the nutrition per serving for a recipe with ${servings} servings containing these ingredients:\n${ingredientList}\n\nReturn ONLY JSON: {"calories": number|null, "protein": number|null, "carbs": number|null, "fat": number|null}`,
-      },
-    ],
-  })
-
-  const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
   try {
-    return JSON.parse(text.trim())
-  } catch {
-    return { calories: null, protein: null, carbs: null, fat: null }
+    const res = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${gatewayKey}` },
+      body: JSON.stringify({
+        model: NUTRITION_MODEL,
+        temperature: 0,
+        max_tokens: 100,
+        response_format: { type: 'json_object' },
+        messages: [{
+          role: 'user',
+          content: `Estimate the nutrition PER SERVING for a recipe that makes ${Math.max(1, servings)} servings from these ingredients:\n${ingredientList}\n\nReturn ONLY JSON: {"calories": number, "protein": number, "carbs": number, "fat": number} (calories in kcal, others in grams, whole numbers).`,
+        }],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) {
+      console.error(`AI Gateway ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      return null
+    }
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const text = (data.choices?.[0]?.message?.content ?? '').trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '')
+    const n = JSON.parse(text) as Record<string, unknown>
+    const num = (v: unknown) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.round(v) : null)
+    const out = { calories: num(n.calories), protein: num(n.protein), carbs: num(n.carbs), fat: num(n.fat) }
+    return out.calories == null ? null : out
+  } catch (err) {
+    console.error('Nutrition estimate failed', err)
+    return null
   }
+}
+
+/** Fills in nutrition on an import result when the source/AI left calories empty. */
+export async function withNutrition<T extends { servings: number; ingredients: Array<{ name: string; quantity: number | null; unit: string | null }>; nutrition?: Nutrition | null }>(
+  recipe: T,
+  gatewayKey: string | undefined,
+): Promise<T> {
+  if (recipe.nutrition?.calories != null) return recipe
+  const est = await estimateNutrition(recipe.ingredients, recipe.servings, gatewayKey)
+  return est ? { ...recipe, nutrition: est } : recipe
 }
 
 export async function generateDietaryTags(
@@ -530,7 +563,9 @@ Response format — return ONLY valid JSON, no markdown, no commentary. Either:
 {"type":"question","text":"your single question here"}
 
 Or when you have enough context:
-{"type":"recipe","title":"...","description":"One or two sentences describing the dish and what makes it appealing","sourceUrl":null,"servings":4,"prepTime":20,"cookTime":25,"ingredients":[{"name":"...","quantity":2,"unit":"tbsp","prepNote":null}],"steps":[{"instruction":"..."}],"dietaryTags":[],"thumbnailUrl":null,"nutrition":null}
+{"type":"recipe","title":"...","description":"One or two sentences describing the dish and what makes it appealing","sourceUrl":null,"servings":4,"prepTime":20,"cookTime":25,"ingredients":[{"name":"...","quantity":2,"unit":"tbsp","prepNote":null}],"steps":[{"instruction":"..."}],"dietaryTags":[],"thumbnailUrl":null,"nutrition":{"calories":520,"protein":32,"carbs":48,"fat":20}}
+
+nutrition is an estimate PER SERVING (calories in kcal, others in grams) — always include it for recipes.
 
 If the user pushes back on a suggestion (e.g. "not that", "I don't want pasta", "too heavy"), treat it as new context — ask a follow-up question or suggest a different recipe. Never repeat a rejected suggestion.`
 

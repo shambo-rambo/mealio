@@ -9,6 +9,9 @@ export interface User {
   avatar: string | null
   familyId: string | null
   role: 'owner' | 'admin' | 'member'
+  emailVerified?: boolean
+  hasPassword?: boolean
+  googleLinked?: boolean
   createdAt: string
 }
 
@@ -145,6 +148,7 @@ export interface Recipe {
   collections?: Collection[]
   dietaryTags?: DietaryTag[]
   nutrition?: Nutrition | null
+  calories?: number | null // per serving; included on list responses
 }
 
 export type MealLabel = 'breakfast' | 'lunch' | 'dinner'

@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { getDb } from './db/index.js'
 import { authRoutes } from './routes/auth.js'
-import { familyRoutes } from './routes/family.js'
+import { familyRoutes, publicInviteRoutes } from './routes/family.js'
 import { listsRoutes, publicListsRoutes } from './routes/lists.js'
 import { storesRoutes } from './routes/stores.js'
 import { recipesRoutes, publicRecipesRoutes } from './routes/recipes.js'
@@ -106,6 +106,7 @@ app.route('/api/v1/collections', collectionsRoutes)
 app.route('/api/v1/meal-plan', mealPlanRoutes)
 app.route('/api/v1/upload', uploadRoutes)
 app.route('/api/v1/push', pushRoutes)
+app.route('/api/v1/public/invites', publicInviteRoutes)
 app.route('/api/v1/public/lists', publicListsRoutes)
 app.route('/api/v1/public/recipes', publicRecipesRoutes)
 

@@ -27,7 +27,7 @@ Rules:
 - unit is short and lowercase: g, kg, ml, l, tsp, tbsp, cup, or null. Use metric for weights (g/kg).
 - name is only the ingredient (e.g. "onion"); put prep detail such as "finely diced" in prepNote.
 - List EVERY ingredient. Each step is one clear instruction, in order, with no numbering.
-- Only include dietaryTags that clearly apply. nutrition is per serving, or null if unknown.
+- Only include dietaryTags that clearly apply. nutrition is per serving (calories in kcal, others in grams) — estimate it if the recipe doesn't state it.
 - Output valid JSON only: double quotes, no trailing commas, no comments.
 
 Recipe:

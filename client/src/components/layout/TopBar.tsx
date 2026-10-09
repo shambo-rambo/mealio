@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../../store/authStore'
+import { AccountMenu } from './AccountMenu'
 
 interface TopBarProps {
   title: string
@@ -19,7 +19,6 @@ export function TopBar({
   transparent = false,
 }: TopBarProps) {
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
 
   const handleBack = () => {
     if (onBack) onBack()
@@ -46,17 +45,7 @@ export function TopBar({
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {right}
-          {showAvatar && user && (
-            <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-primary-container bg-secondary-container flex items-center justify-center flex-shrink-0">
-              {user.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="font-headline font-bold text-sm text-primary-container">
-                  {user.name.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
-          )}
+          {showAvatar && <AccountMenu />}
         </div>
       </div>
     </header>

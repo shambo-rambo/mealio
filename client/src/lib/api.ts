@@ -24,7 +24,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    // Auth form endpoints use 401 for "wrong password" - let those pages show the error themselves.
+    const url: string = err.config?.url ?? ''
+    const isAuthForm = url.startsWith('/auth/') && !url.startsWith('/auth/me')
+    if (err.response?.status === 401 && !isAuthForm) {
       localStorage.removeItem('mealio_token')
       localStorage.removeItem('mealio_user')
       window.location.href = '/login'
