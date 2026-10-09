@@ -8,6 +8,7 @@ export type Bindings = {
   FAMILY_ROOM: DurableObjectNamespace
   JWT_SECRET: string
   ANTHROPIC_API_KEY: string
+  AI_GATEWAY_API_KEY?: string
   TYPESAFE_API_KEY: string
   YOUTUBE_API_KEY: string
   INSTAGRAM_TOKEN: string

@@ -5,7 +5,7 @@ import { mealPlan, recipes } from '../db/schema.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { expandRecurrenceRule, type RecurrenceRule } from '../lib/recurrence.js'
 import { broadcastToFamily } from '../lib/ws.js'
-import { chatSuggestMeal } from '../lib/ai.js'
+import { chatSuggestMeal, withNutrition } from '../lib/ai.js'
 import type { AppEnv } from '../types.js'
 
 export const mealPlanRoutes = new Hono<AppEnv>()
@@ -244,5 +244,8 @@ mealPlanRoutes.post('/suggest', async (c) => {
   }
 
   const response = await chatSuggestMeal(messages, recentMeals, c.env.ANTHROPIC_API_KEY)
+  if (response.type === 'recipe') {
+    response.importResult = await withNutrition(response.importResult, c.env.AI_GATEWAY_API_KEY)
+  }
   return c.json(response)
 })
