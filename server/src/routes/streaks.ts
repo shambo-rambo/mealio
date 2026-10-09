@@ -119,8 +119,10 @@ streaksRoutes.patch('/goals/:id', async (c) => {
   const problem = validateGoal(goal.type, parsed.data.title ?? goal.title, target)
   if (problem) return c.json(err('validation_error', problem), 400)
 
+  // Calorie / Daily Dozen titles are derived from the target, so keep them in step when it changes.
+  const title = goal.type === 'custom' ? parsed.data.title ?? goal.title : describeGoal({ type: goal.type, target, comparator })
   const [updated] = await db.update(streakGoals)
-    .set({ title: parsed.data.title ?? goal.title, target, comparator })
+    .set({ title, target, comparator })
     .where(eq(streakGoals.id, id))
     .returning()
   return c.json({ goal: updated })
