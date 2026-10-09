@@ -15,7 +15,7 @@ import {
 } from '../../hooks/useStreaks'
 
 const EVENING_HOUR = 18
-const CUSTOM_IDEAS = ['Walk 30 minutes', 'No alcohol', 'Drink 2L of water', 'Read for 20 minutes', 'In bed by 10pm']
+const CUSTOM_IDEAS = ['Drink 5 glasses of water', 'Exercise: 90 min moderate or 40 min vigorous', 'Walk 30 minutes', 'No alcohol', 'In bed by 10pm']
 
 const fieldCls = 'w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-sm'
 const primaryBtn = 'w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold disabled:opacity-40'
@@ -98,7 +98,7 @@ function HistoryStrip({ data }: { data: StreaksData }) {
 
 // ── Check-in sheet ────────────────────────────────────────────────────────────
 
-interface GoalState { achieved?: boolean; ticked?: Set<DailyDozenId>; kcal?: string }
+interface GoalState { achieved?: boolean; ticked?: Set<string>; kcal?: string }
 
 function CheckInSheet({ data, date, onClose }: { data: StreaksData; date: string | null; onClose: () => void }) {
   return (
@@ -206,7 +206,7 @@ function CheckInFields({ data, date, goals, plan, saving, onSubmit }: {
                     })}
                   </div>
                   <p className={`text-sm font-semibold ${ok ? 'text-primary' : 'text-on-surface-variant'}`}>
-                    {count}/12 groups · goal {g.target} {ok ? '✓' : ''}
+                    {count}/{DAILY_DOZEN.length} groups · goal {g.target} {ok ? '✓' : ''}
                   </p>
                   {(!plan || plan.meals === 0) && <p className="text-xs text-on-surface-variant">Nothing planned for this day, so tap what you actually ate.</p>}
                 </>
@@ -262,12 +262,12 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
   const [title, setTitle] = useState(goal?.type === 'custom' ? goal.title : '')
   const [kcal, setKcal] = useState(String(goal?.type === 'calories' ? goal.target : 2000))
   const [comparator, setComparator] = useState<'lte' | 'gte'>(goal?.comparator ?? 'lte')
-  const [groups, setGroups] = useState(goal?.type === 'daily_dozen' ? Math.round(goal.target ?? 9) : 9)
+  const [groups, setGroups] = useState(goal?.type === 'daily_dozen' ? Math.round(goal.target ?? 8) : 8)
 
   const types: { id: GoalType; label: string; hint: string }[] = [
     { id: 'custom', label: 'My own goal', hint: 'Yes or no each evening' },
     { id: 'calories', label: 'Calories', hint: 'Worked out from your meal plan' },
-    { id: 'daily_dozen', label: 'Daily Dozen', hint: 'Food groups from your meal plan' },
+    { id: 'daily_dozen', label: 'Daily Dozen foods', hint: 'Food groups from your meal plan' },
   ]
 
   const submit = () => {
@@ -329,8 +329,8 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
 
       {type === 'daily_dozen' && (
         <div className="space-y-3">
-          <p className="text-sm text-on-surface">Hit <span className="font-bold text-primary">{groups}</span> of the 12 Daily Dozen groups</p>
-          <input type="range" min={1} max={12} value={groups} onChange={(e) => setGroups(Number(e.target.value))} className="w-full accent-primary" />
+          <p className="text-sm text-on-surface">Hit <span className="font-bold text-primary">{groups}</span> of the {DAILY_DOZEN.length} Daily Dozen food groups</p>
+          <input type="range" min={1} max={DAILY_DOZEN.length} value={groups} onChange={(e) => setGroups(Number(e.target.value))} className="w-full accent-primary" />
           <p className="text-xs text-on-surface-variant">Each evening we tick the groups your meal plan covers and ask you to confirm.</p>
         </div>
       )}
@@ -430,7 +430,7 @@ export function StreaksPage() {
                     <span className="flex-1 min-w-0">
                       <span className="block font-headline font-bold text-on-surface truncate">{g.title}</span>
                       <span className="block text-xs text-on-surface-variant truncate">
-                        {done ? (done.value != null ? `Confirmed: ${Math.round(done.value)}${g.type === 'calories' ? ' kcal' : '/12 groups'}` : done.achieved ? 'Done' : 'Missed') : goalSubtitle(g)}
+                        {done ? (done.value != null ? `Confirmed: ${Math.round(done.value)}${g.type === 'calories' ? ' kcal' : ' groups'}` : done.achieved ? 'Done' : 'Missed') : goalSubtitle(g)}
                       </span>
                     </span>
                     <span className={`flex flex-col items-center flex-shrink-0 min-w-[44px] ${g.streak.current > 0 ? 'text-orange-500' : 'text-on-surface-variant/40'}`}>

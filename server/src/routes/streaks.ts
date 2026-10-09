@@ -69,7 +69,7 @@ const goalBody = z.object({
 function validateGoal(type: 'custom' | 'calories' | 'daily_dozen', title: string, target: number | null): string | null {
   if (type === 'custom' && !title) return 'Give your goal a name'
   if (type === 'calories' && (target == null || target < 500 || target > 10000)) return 'Calorie target must be between 500 and 10,000'
-  if (type === 'daily_dozen' && (target == null || !Number.isInteger(target) || target < 1 || target > 12)) return 'Daily Dozen target must be 1 to 12 groups'
+  if (type === 'daily_dozen' && (target == null || !Number.isInteger(target) || target < 1 || target > 10)) return 'Daily Dozen target must be 1 to 10 food groups'
   return null
 }
 

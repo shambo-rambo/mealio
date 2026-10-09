@@ -106,6 +106,6 @@ export function computeStreaks(goals: GoalLike[], checkins: CheckinLike[], today
 
 export function describeGoal(g: { type: GoalLike['type']; target: number | null; comparator: 'lte' | 'gte' }): string {
   if (g.type === 'calories') return `${g.comparator === 'lte' ? 'Stay under' : 'Eat at least'} ${Math.round(g.target ?? 0)} kcal`
-  if (g.type === 'daily_dozen') return `Hit ${Math.round(g.target ?? 0)} of 12 Daily Dozen groups`
+  if (g.type === 'daily_dozen') return `Hit ${Math.round(g.target ?? 0)} of 10 Daily Dozen food groups`
   return 'Goal'
 }
