@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { RecipeImportResult, VideoData } from '../types.js'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-haiku-4-5-20251001'
 
 const RECIPE_SYSTEM = `You are a recipe parsing assistant. Extract structured recipe data and return ONLY valid JSON matching this exact schema:
 {
