@@ -88,6 +88,10 @@ export function AccountMenu() {
             </div>
           </div>
 
+          <button role="menuitem" onClick={() => go('/streaks?goals=1')} className={item}>
+            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">local_fire_department</span>
+            Daily goals
+          </button>
           <button role="menuitem" onClick={() => go('/family')} className={item}>
             <span className="material-symbols-outlined text-[20px] text-on-surface-variant">group</span>
             Family members &amp; invites

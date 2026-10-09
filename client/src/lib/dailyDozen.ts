@@ -27,7 +27,7 @@ export const DAILY_DOZEN: DailyDozenItem[] = [
     description: 'Beans, lentils, chickpeas, tofu, tempeh, edamame',
     keywords: [
       'bean', 'lentil', 'legume', 'chickpea', 'hummus', 'tofu', 'tempeh',
-      'edamame', 'soy', 'soya', 'soymilk', 'dal', 'dhal', 'daal',
+      'edamame', 'soybean', 'soy bean', 'dal', 'dhal', 'daal',
       'cannellini', 'fava', 'adzuki', 'mung', 'split pea', 'black bean',
       'kidney bean', 'navy bean', 'pinto bean', 'lima bean',
     ],
@@ -39,8 +39,8 @@ export const DAILY_DOZEN: DailyDozenItem[] = [
     emoji: '🫐',
     description: 'All berries — fresh, frozen or dried',
     keywords: [
-      'berry', 'berries', 'strawberry', 'blueberry', 'raspberry', 'blackberry',
-      'cranberry', 'goji', 'acai', 'elderberry', 'mulberry', 'boysenberry',
+      'berry', 'berries', 'strawberry', 'strawberries', 'blueberry', 'blueberries',
+      'raspberry', 'raspberries', 'blackberry', 'blackberries', 'cranberry', 'cranberries', 'goji', 'acai', 'elderberry', 'mulberry', 'boysenberry',
       'grape', 'raisin', 'currant', 'gooseberry',
     ],
   },
@@ -187,9 +187,41 @@ export function classifyText(text: string): Set<DailyDozenId> {
   return found
 }
 
+// Soy milk counts toward Beans (Greger: 1 cup = 1 serving) but only when the
+// recipe uses a meaningful amount — a splash in overnight oats shouldn't tick it.
+const SOY_MILK_RE = /\bsoy(a)?\s?milk\b/
+const SOY_MILK_MIN_ML = 120
+
+const UNIT_ML: Record<string, number> = {
+  ml: 1, l: 1000, litre: 1000, liter: 1000,
+  cup: 240, tbsp: 15, tablespoon: 15, tsp: 5, teaspoon: 5,
+}
+
+function unitToMl(quantity: number, unit: string): number | null {
+  const u = unit.toLowerCase().replace(/\.$/, '').replace(/s$/, '')
+  const factor = UNIT_ML[u] ?? UNIT_ML[unit.toLowerCase()]
+  return factor ? quantity * factor : null
+}
+
+export interface IngredientInput {
+  name: string
+  quantity?: number | null
+  unit?: string | null
+}
+
+function classifyIngredient(ing: IngredientInput): Set<DailyDozenId> {
+  if (SOY_MILK_RE.test(ing.name.toLowerCase())) {
+    const found = classifyText(ing.name.replace(SOY_MILK_RE, ''))
+    const ml = ing.quantity != null && ing.unit ? unitToMl(ing.quantity, ing.unit) : null
+    if (ml != null && ml >= SOY_MILK_MIN_ML) found.add('beans')
+    return found
+  }
+  return classifyText(ing.name)
+}
+
 export interface MealClassificationInput {
   recipeTitle?: string | null
-  ingredientNames?: string[]
+  ingredients?: IngredientInput[]
   noteText?: string | null
   dayNote?: string | null
 }
@@ -205,7 +237,7 @@ export function classifyDay(meals: MealClassificationInput[]): Set<DailyDozenId>
 
   for (const meal of meals) {
     if (meal.recipeTitle) add(classifyText(meal.recipeTitle))
-    for (const name of meal.ingredientNames ?? []) add(classifyText(name))
+    for (const ing of meal.ingredients ?? []) add(classifyIngredient(ing))
     if (meal.noteText) add(classifyText(meal.noteText))
     if (meal.dayNote) add(classifyText(meal.dayNote))
   }
