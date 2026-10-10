@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 
 const tabs = [
+  { to: '/streaks', icon: 'local_fire_department', label: 'Streaks' },
   { to: '/planner', icon: 'calendar_today', label: 'Meal Plan' },
   { to: '/recipes', icon: 'restaurant_menu', label: 'Recipes' },
   { to: '/shopping', icon: 'shopping_basket', label: 'Shopping' },
@@ -16,7 +17,7 @@ export function BottomNav() {
         {tabs.map(({ to, icon, label }) => {
           const active = location.pathname.startsWith(to)
           return (
-            <NavLink key={to} to={to} className="flex flex-col items-center justify-center gap-1 w-20 group">
+            <NavLink key={to} to={to} className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 group">
               <span
                 className={`flex items-center justify-center h-8 w-14 rounded-full transition-all duration-200 ${
                   active ? 'bg-secondary-container text-primary' : 'text-on-surface-variant group-active:bg-surface-container'

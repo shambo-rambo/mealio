@@ -1151,8 +1151,8 @@ export function PlannerPage() {
     categoryByDate[date] = classifyDay(
       dayEntries.map((e) => ({
         recipeTitle: e.recipe?.title,
-        ingredientNames: e.recipeId
-          ? (recipeMap[e.recipeId]?.ingredients?.map((i) => i.name) ?? [])
+        ingredients: e.recipeId
+          ? (recipeMap[e.recipeId]?.ingredients?.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit })) ?? [])
           : [],
         noteText: e.noteText,
         dayNote: e.dayNote,

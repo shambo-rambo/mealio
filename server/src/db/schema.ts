@@ -279,3 +279,47 @@ export const familyInvites = sqliteTable(
     familyIdx: index('family_invites_family_idx').on(t.familyId),
   }),
 )
+
+// Per-user daily goals that build streaks. `plan_calories` / `plan_dozen` goals are
+// pre-filled from the meal plan at check-in time; the user confirms or adjusts the figure.
+export const streakGoals = sqliteTable(
+  'streak_goals',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type', { enum: ['custom', 'calories', 'daily_dozen'] }).notNull(),
+    title: text('title').notNull(),
+    // kcal for calories goals, number of food groups (1-12) for daily_dozen; null for custom.
+    target: real('target'),
+    // calories: 'lte' = stay at or under, 'gte' = reach at least. daily_dozen is always 'gte'.
+    comparator: text('comparator', { enum: ['lte', 'gte'] }).notNull().default('gte'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdDate: text('created_date').notNull(), // user-local YYYY-MM-DD the goal starts counting from
+    archivedDate: text('archived_date'), // goal stops counting from this local date
+    createdAt: createdAt(),
+  },
+  (t) => ({ userIdx: index('streak_goals_user_idx').on(t.userId) }),
+)
+
+export const streakCheckins = sqliteTable(
+  'streak_checkins',
+  {
+    id: id(),
+    goalId: text('goal_id')
+      .notNull()
+      .references(() => streakGoals.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    achieved: integer('achieved', { mode: 'boolean' }).notNull(),
+    value: real('value'), // the confirmed figure for plan-based goals
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    goalDateIdx: uniqueIndex('streak_checkins_goal_date_idx').on(t.goalId, t.date),
+    userDateIdx: index('streak_checkins_user_date_idx').on(t.userId, t.date),
+  }),
+)
