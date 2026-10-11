@@ -1,11 +1,12 @@
 import { Hono } from 'hono'
-import { eq, and, gte } from 'drizzle-orm'
+import { eq, and, gte, inArray } from 'drizzle-orm'
 import { z } from 'zod'
-import { mealPlan, recipes } from '../db/schema.js'
+import { mealPlan, recipes, ingredients } from '../db/schema.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { expandRecurrenceRule, type RecurrenceRule } from '../lib/recurrence.js'
 import { broadcastToFamily } from '../lib/ws.js'
 import { chatSuggestMeal, withNutrition } from '../lib/ai.js'
+import { scoreLibraryRecipes } from '../lib/classify.js'
 import type { AppEnv } from '../types.js'
 
 export const mealPlanRoutes = new Hono<AppEnv>()
@@ -205,7 +206,73 @@ const suggestBodySchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })),
+  shownRecipeIds: z.array(z.string()).optional(), // library recipes already offered this chat
+  forceGenerate: z.boolean().optional(), // skip the library, write a new recipe
 })
+
+const LIBRARY_MIN_SCORE = 0.6
+const LIBRARY_MAX_RESULTS = 3
+const LIBRARY_POOL = 60
+const MEAL_TYPES_FOR: Record<string, string[]> = {
+  breakfast: ['breakfast'],
+  lunch: ['lunch', 'dinner'],
+  dinner: ['dinner', 'lunch'],
+}
+
+
+async function findLibraryMatches(
+  db: AppEnv['Variables']['db'],
+  familyId: string,
+  mealLabel: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  excludeIds: Set<string>,
+  jevKey: string,
+) {
+  const allowed = MEAL_TYPES_FOR[mealLabel] ?? []
+  const all = await db.query.recipes.findMany({ where: eq(recipes.familyId, familyId) })
+  const pool = all
+    .filter((r) => !excludeIds.has(r.id) && (r.mealType == null || allowed.includes(r.mealType)))
+    .slice(0, LIBRARY_POOL)
+  if (pool.length === 0) return []
+
+  const ings: Array<{ recipeId: string; name: string }> = []
+  for (let i = 0; i < pool.length; i += 50) {
+    const rows = await db.query.ingredients.findMany({
+      where: inArray(ingredients.recipeId, pool.slice(i, i + 50).map((r) => r.id)),
+      columns: { recipeId: true, name: true },
+    })
+    ings.push(...rows)
+  }
+  const namesByRecipe = new Map<string, string[]>()
+  for (const i of ings) namesByRecipe.set(i.recipeId, [...(namesByRecipe.get(i.recipeId) ?? []), i.name])
+
+  const candidates = pool.map((r) => {
+    const total = (r.prepTime ?? 0) + (r.cookTime ?? 0)
+    const facts = [
+      r.effort && `${r.effort} effort`,
+      total > 0 && `${total} min`,
+      r.protein && r.protein !== 'none' && `${r.protein}`,
+      r.cuisine && `${r.cuisine.replace(/_/g, ' ')} cuisine`,
+      r.kidFriendly && 'kid-friendly',
+    ].filter(Boolean).join(', ')
+    return { id: r.id, summary: `${r.title} (${facts}). Ingredients: ${(namesByRecipe.get(r.id) ?? []).slice(0, 12).join(', ')}` }
+  })
+
+  const conversation = messages.map((m) => `${m.role === 'user' ? 'Person' : 'Assistant'}: ${m.content}`).join('\n')
+  const scores = await scoreLibraryRecipes(conversation, candidates, jevKey)
+  const byId = new Map(pool.map((r) => [r.id, r]))
+  return [...scores.entries()]
+    .filter(([, score]) => score >= LIBRARY_MIN_SCORE)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, LIBRARY_MAX_RESULTS)
+    .map(([id]) => {
+      const r = byId.get(id)!
+      return {
+        id: r.id, title: r.title, pictureUrl: r.pictureUrl, prepTime: r.prepTime, cookTime: r.cookTime,
+        servings: r.servings, effort: r.effort, protein: r.protein,
+      }
+    })
+}
 
 mealPlanRoutes.post('/suggest', async (c) => {
   const db = c.get('db')
@@ -216,7 +283,7 @@ mealPlanRoutes.post('/suggest', async (c) => {
   const result = suggestBodySchema.safeParse(body)
   if (!result.success) return c.json({ error: { code: 'validation_error', message: result.error.issues[0].message } }, 400)
 
-  const { mealLabel, messages } = result.data
+  const { mealLabel, messages, shownRecipeIds = [], forceGenerate } = result.data
 
   // Gather recent meal titles of the same type to avoid repetition
   const twoWeeksAgo = new Date()
@@ -232,7 +299,9 @@ mealPlanRoutes.post('/suggest', async (c) => {
   })
 
   const recentMeals: string[] = []
+  const recentRecipeIds = new Set<string>()
   for (const entry of recentEntries) {
+    if (entry.recipeId) recentRecipeIds.add(entry.recipeId)
     if (entry.noteText) recentMeals.push(entry.noteText)
     if (entry.recipeId) {
       const recipe = await db.query.recipes.findFirst({
@@ -243,9 +312,18 @@ mealPlanRoutes.post('/suggest', async (c) => {
     }
   }
 
-  const response = await chatSuggestMeal(messages, recentMeals, c.env.ANTHROPIC_API_KEY)
-  if (response.type === 'recipe') {
-    response.importResult = await withNutrition(response.importResult, c.env.AI_GATEWAY_API_KEY)
+  // Library first: Haiku only asks the questions; Jev then scores the family's own recipes against the
+  // answers. A brand-new recipe is only written when nothing saved fits (or the user asks for one).
+  let turn = await chatSuggestMeal(messages, recentMeals, c.env.ANTHROPIC_API_KEY, forceGenerate ? 'generate' : 'ask')
+
+  if (turn.type === 'ready') {
+    const matches = await findLibraryMatches(db, familyId, mealLabel, messages, new Set([...recentRecipeIds, ...shownRecipeIds]), c.env.TYPESAFE_API_KEY)
+    if (matches.length) return c.json({ type: 'library', recipes: matches })
+    turn = await chatSuggestMeal(messages, recentMeals, c.env.ANTHROPIC_API_KEY, 'generate')
   }
-  return c.json(response)
+
+  if (turn.type === 'recipe') {
+    turn.importResult = await withNutrition(turn.importResult, c.env.AI_GATEWAY_API_KEY)
+  }
+  return c.json(turn)
 })

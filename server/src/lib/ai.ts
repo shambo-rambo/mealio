@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { RecipeImportResult, VideoData } from '../types.js'
+import { looksLikeRecipe } from './classify.js'
 
 const MODEL = 'claude-haiku-4-5-20251001'
 
@@ -81,7 +82,10 @@ Return ONLY the JSON object, no markdown, no explanation.
 IMPORTANT: If the video does not contain a recipe, return ONLY this exact JSON object:
 {"error": "no_recipe_found"}`
 
-export async function parseRecipeFromSocialVideo(data: VideoData, sourceUrl: string, apiKey: string): Promise<RecipeImportResult> {
+export async function parseRecipeFromSocialVideo(data: VideoData, sourceUrl: string, apiKey: string, jevKey?: string): Promise<RecipeImportResult> {
+  if (!await looksLikeRecipe(`${data.title}\n${data.description}\n${data.transcript ?? ''}`, jevKey)) {
+    throw new Error('no_recipe_found')
+  }
   const client = new Anthropic({ apiKey })
   const parts: string[] = [
     `Creator: ${data.creator}`,
@@ -332,7 +336,7 @@ function htmlToText(html: string): string {
     .trim()
 }
 
-export async function parseRecipeFromUrl(url: string, apiKey: string): Promise<RecipeImportResult> {
+export async function parseRecipeFromUrl(url: string, apiKey: string, jevKey?: string): Promise<RecipeImportResult> {
   let html = ''
   try {
     const res = await fetch(url, {
@@ -373,6 +377,7 @@ export async function parseRecipeFromUrl(url: string, apiKey: string): Promise<R
   // Slow path: no JSON-LD — strip to plain text and send full recipe to AI
   const client = new Anthropic({ apiKey })
   const text = htmlToText(html).slice(0, 15_000)
+  if (!await looksLikeRecipe(text, jevKey)) throw new Error('no_recipe_found')
 
   const msg = await client.messages.create({
     model: MODEL,
@@ -391,7 +396,8 @@ export async function parseRecipeFromUrl(url: string, apiKey: string): Promise<R
   return { ...result, sourceUrl: result.sourceUrl ?? url, thumbnailUrl }
 }
 
-export async function parseRecipeFromText(text: string, apiKey: string): Promise<RecipeImportResult> {
+export async function parseRecipeFromText(text: string, apiKey: string, jevKey?: string): Promise<RecipeImportResult> {
+  if (!await looksLikeRecipe(text, jevKey)) throw new Error('no_recipe_found')
   const client = new Anthropic({ apiKey })
   const msg = await client.messages.create({
     model: MODEL,
@@ -486,88 +492,56 @@ export async function withNutrition<T extends { servings: number; ingredients: A
   return est ? { ...recipe, nutrition: est } : recipe
 }
 
-export async function generateDietaryTags(
-  ingredients: Array<{ name: string }>,
-  apiKey: string,
-): Promise<Array<'vegetarian' | 'vegan' | 'gluten_free' | 'dairy_free' | 'nut_free'>> {
-  const client = new Anthropic({ apiKey })
-  const list = ingredients.map((i) => i.name).join(', ')
-  const msg = await client.messages.create({
-    model: MODEL,
-    max_tokens: 128,
-    messages: [
-      {
-        role: 'user',
-        content: `Given these ingredients: ${list}\n\nWhich of these dietary tags apply? Return ONLY a JSON array containing applicable tags from: ["vegetarian","vegan","gluten_free","dairy_free","nut_free"]`,
-      },
-    ],
-  })
+export type ChatTurn =
+  | { type: 'question'; text: string }
+  | { type: 'ready' }
+  | { type: 'recipe'; importResult: RecipeImportResult }
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text : '[]'
-  try {
-    return JSON.parse(text.trim())
-  } catch {
-    return []
-  }
-}
-
-export const ITEM_CATEGORIES = [
-  'Produce', 'Dairy', 'Meat & Seafood', 'Bakery', 'Pantry', 'Beverages',
-  'Frozen', 'Snacks', 'Health & Beauty', 'Household', 'Other',
-] as const
-
-/** Quick classification with Jev (TypeSafe AI): a single Choice question over ITEM_CATEGORIES. */
-export async function suggestItemCategory(itemName: string, apiKey: string): Promise<string> {
-  const res = await fetch('https://api.typesafe.ai/v1/systemone', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'jev-latest',
-      state: itemName,
-      questions: {
-        category: {
-          type: 'choice',
-          instructions: 'Which grocery store category does this item belong to?',
-          criteria: Object.fromEntries(ITEM_CATEGORIES.map((c) => [c, c])),
-        },
-      },
-    }),
-  })
-  if (!res.ok) throw new Error(`TypeSafe ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  const data = await res.json() as { answers?: { category?: { choice?: string } } }
-  const choice = data.answers?.category?.choice
-  return ITEM_CATEGORIES.find((c) => c === choice) ?? 'Other'
-}
-
+/**
+ * mode 'ask': ask questions until there's enough context, then answer {"type":"ready"} — the route then
+ * looks in the family's own recipe library (scored by Jev) before spending tokens on a new recipe.
+ * mode 'generate': write a brand-new recipe from the conversation so far.
+ */
 export async function chatSuggestMeal(
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   recentMeals: string[],
   apiKey: string,
-): Promise<{ type: 'question'; text: string } | { type: 'recipe'; importResult: RecipeImportResult }> {
+  mode: 'ask' | 'generate' = 'generate',
+): Promise<ChatTurn> {
   const client = new Anthropic({ apiKey })
 
   const recentContext = recentMeals.length > 0
     ? `\n\nThe user has had these meals recently — avoid suggesting them: ${recentMeals.join(', ')}.`
     : ''
 
-  const system = `You are a friendly meal suggestion assistant. Your job is to ask the user a few short questions to understand what they'd like to cook, then suggest a specific recipe.
+  const recipeFormat = `{"type":"recipe","title":"...","description":"One or two sentences describing the dish and what makes it appealing","sourceUrl":null,"servings":4,"prepTime":20,"cookTime":25,"ingredients":[{"name":"...","quantity":2,"unit":"tbsp","prepNote":null}],"steps":[{"instruction":"..."}],"dietaryTags":[],"thumbnailUrl":null,"nutrition":{"calories":520,"protein":32,"carbs":48,"fat":20}}
+
+nutrition is an estimate PER SERVING (calories in kcal, others in grams) — always include it for recipes.`
+
+  const system = mode === 'ask'
+    ? `You are a friendly meal suggestion assistant. Your job is to ask the user a few short questions to understand what they'd like to cook. Another system will then pick the dish, so do NOT suggest or write a recipe yourself.
 
 Rules:
 - Ask ONE focused question at a time — never multiple questions in one message
 - Keep questions conversational and brief
 - Cover what matters: time available, number of people, mood or craving, any dietary needs, ingredients they want to use up
-- Stop asking when you have enough context — usually 3 to 5 exchanges is plenty; don't over-question
-- When you're ready, generate a complete detailed recipe${recentContext}
+- Stop asking when you have enough context — usually 3 to 5 exchanges is plenty; don't over-question${recentContext}
 
 Response format — return ONLY valid JSON, no markdown, no commentary. Either:
 {"type":"question","text":"your single question here"}
 
 Or when you have enough context:
-{"type":"recipe","title":"...","description":"One or two sentences describing the dish and what makes it appealing","sourceUrl":null,"servings":4,"prepTime":20,"cookTime":25,"ingredients":[{"name":"...","quantity":2,"unit":"tbsp","prepNote":null}],"steps":[{"instruction":"..."}],"dietaryTags":[],"thumbnailUrl":null,"nutrition":{"calories":520,"protein":32,"carbs":48,"fat":20}}
+{"type":"ready"}
 
-nutrition is an estimate PER SERVING (calories in kcal, others in grams) — always include it for recipes.
+If the user pushes back on a suggestion (e.g. "not that", "I don't want pasta", "too heavy"), treat it as new context — ask a follow-up question or answer {"type":"ready"} again.`
+    : `You are a friendly meal suggestion assistant. The user has told you what they'd like to cook. Write ONE specific, complete, detailed recipe that fits the whole conversation.
 
-If the user pushes back on a suggestion (e.g. "not that", "I don't want pasta", "too heavy"), treat it as new context — ask a follow-up question or suggest a different recipe. Never repeat a rejected suggestion.`
+Rules:
+- Use any ingredients they want to use up only where they genuinely fit
+- Never repeat a rejected suggestion${recentContext}
+
+Response format — return ONLY valid JSON, no markdown, no commentary:
+${recipeFormat}`
 
   // First turn — no messages yet, ask the opening question
   const turnMessages = messages.length === 0
@@ -576,7 +550,7 @@ If the user pushes back on a suggestion (e.g. "not that", "I don't want pasta", 
 
   const msg = await client.messages.create({
     model: MODEL,
-    max_tokens: 1200,
+    max_tokens: mode === 'ask' ? 300 : 1800,
     system,
     messages: turnMessages,
   })
@@ -584,10 +558,11 @@ If the user pushes back on a suggestion (e.g. "not that", "I don't want pasta", 
   const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : ''
 
   try {
-    const parsed = JSON.parse(raw)
+    const parsed = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim())
     if (parsed.type === 'question' && typeof parsed.text === 'string') {
       return { type: 'question', text: parsed.text }
     }
+    if (parsed.type === 'ready' && mode === 'ask') return { type: 'ready' }
     if (parsed.type === 'recipe') {
       return { type: 'recipe', importResult: safeParseRecipe(raw.replace(/^.*?"type"\s*:\s*"recipe"\s*,/, '{')) }
     }

@@ -62,6 +62,7 @@ export interface ShoppingItem {
   quantity: number | null
   packageSize: string | null
   category: string | null
+  aisle?: string | null
   storeId: string | null
   price: number | null
   imageUrl: string | null
@@ -88,6 +89,7 @@ export interface Ingredient {
   quantity: number | null
   unit: string | null
   prepNote: string | null
+  foodGroup?: string | null
   sortOrder: number
 }
 
@@ -110,6 +112,12 @@ export interface Collection {
   name: string
   familyId: string
   createdBy: string | null
+}
+
+export const ALLERGENS = ['nuts', 'dairy', 'gluten', 'egg', 'shellfish', 'fish', 'soy', 'sesame'] as const
+export type Allergen = (typeof ALLERGENS)[number]
+export const ALLERGEN_LABELS: Record<Allergen, string> = {
+  nuts: 'Nuts', dairy: 'Dairy', gluten: 'Gluten', egg: 'Egg', shellfish: 'Shellfish', fish: 'Fish', soy: 'Soy', sesame: 'Sesame',
 }
 
 export type DietaryTag = 'vegetarian' | 'vegan' | 'gluten_free' | 'dairy_free' | 'nut_free'
@@ -139,6 +147,13 @@ export interface Recipe {
   preparedCount: number
   shareToken: string | null
   createdAt: string
+  // Jev-assigned tags (null until classified)
+  mealType?: string | null
+  effort?: string | null
+  protein?: string | null
+  cuisine?: string | null
+  kidFriendly?: boolean | null
+  allergens?: Allergen[]
   // Relations (populated by API)
   ingredients?: Ingredient[]
   steps?: RecipeStep[]
@@ -230,6 +245,27 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number]
 
+/** Supermarket walk order — keep in sync with AISLES in server/src/lib/classify.ts. */
+export const AISLES = [
+  'Fruit & Veg', 'Bakery', 'Meat & Fish', 'Deli & Dairy', 'Frozen',
+  'Pasta, Rice & Grains', 'Tins & Jars', 'Sauces & Oils', 'Baking & Spices',
+  'Breakfast & Spreads', 'Snacks & Sweets', 'Drinks', 'Health & Beauty',
+  'Cleaning & Household', 'Baby & Pet', 'Other',
+] as const
+
+const AISLE_FOR_CATEGORY: Record<string, (typeof AISLES)[number]> = {
+  Produce: 'Fruit & Veg', Dairy: 'Deli & Dairy', 'Meat & Seafood': 'Meat & Fish', Bakery: 'Bakery',
+  Pantry: 'Tins & Jars', Beverages: 'Drinks', Frozen: 'Frozen', Snacks: 'Snacks & Sweets',
+  'Health & Beauty': 'Health & Beauty', Household: 'Cleaning & Household',
+}
+
+/** Position in the shop: the item's own aisle, else the aisle implied by its category. */
+export function aisleRank(item: { aisle?: string | null; category: string | null }): number {
+  const aisle = item.aisle ?? AISLE_FOR_CATEGORY[item.category ?? ''] ?? 'Other'
+  const i = (AISLES as readonly string[]).indexOf(aisle)
+  return i === -1 ? AISLES.length : i
+}
+
 export interface PendingMealPlan {
   date: string
   mealLabel: MealLabel
@@ -243,11 +279,25 @@ export interface SuggestMessage {
 export type SuggestTurnRequest = {
   mealLabel: MealLabel
   messages: SuggestMessage[]
+  shownRecipeIds?: string[]
+  forceGenerate?: boolean
+}
+
+export interface LibrarySuggestion {
+  id: string
+  title: string
+  pictureUrl: string | null
+  prepTime: number | null
+  cookTime: number | null
+  servings: number
+  effort: string | null
+  protein: string | null
 }
 
 export type SuggestTurnResponse =
   | { type: 'question'; text: string }
   | { type: 'recipe'; importResult: RecipeImportResult }
+  | { type: 'library'; recipes: LibrarySuggestion[] }
 
 export const DIETARY_TAG_LABELS: Record<DietaryTag, string> = {
   vegetarian: 'Vegetarian',

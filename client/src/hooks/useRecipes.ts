@@ -3,11 +3,9 @@ import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import type { Recipe, Collection, RecipeImportResult } from '../types'
 
-export function useRecipesQuery(filters?: { search?: string; collection?: string; tag?: string }) {
+export function useRecipesQuery(filters?: Record<string, string | undefined>) {
   const params = new URLSearchParams()
-  if (filters?.search) params.set('search', filters.search)
-  if (filters?.collection) params.set('collection', filters.collection)
-  if (filters?.tag) params.set('tag', filters.tag)
+  for (const [k, v] of Object.entries(filters ?? {})) if (v) params.set(k, v)
 
   return useQuery({
     queryKey: queryKeys.recipes.all(filters),
