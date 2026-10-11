@@ -90,6 +90,7 @@ export const shoppingItems = sqliteTable('shopping_items', {
   quantity: real('quantity'),
   packageSize: text('package_size'),
   category: text('category'),
+  aisle: text('aisle'),
   storeId: text('store_id').references(() => stores.id, { onDelete: 'set null' }),
   price: real('price'),
   imageUrl: text('image_url'),
@@ -133,6 +134,13 @@ export const recipes = sqliteTable('recipes', {
   lastPreparedAt: text('last_prepared_at'),
   preparedCount: integer('prepared_count').notNull().default(0),
   shareToken: text('share_token').unique(),
+  // Jev-assigned tags (null mealType = not classified yet)
+  mealType: text('meal_type'),
+  effort: text('effort'),
+  protein: text('protein'),
+  cuisine: text('cuisine'),
+  kidFriendly: integer('kid_friendly', { mode: 'boolean' }),
+  allergens: text('allergens'), // JSON array of allergen ids present in the recipe
   createdAt: createdAt(),
 })
 
@@ -145,6 +153,7 @@ export const ingredients = sqliteTable('ingredients', {
   quantity: real('quantity'),
   unit: text('unit'),
   prepNote: text('prep_note'),
+  foodGroup: text('food_group'), // Daily Dozen group id, or 'none'
   sortOrder: integer('sort_order').notNull().default(0),
 })
 
@@ -243,6 +252,7 @@ export const itemHistory = sqliteTable('item_history', {
   name: text('name').notNull(),
   nameLower: text('name_lower').notNull(),
   category: text('category'),
+  aisle: text('aisle'),
   storeId: text('store_id').references(() => stores.id, { onDelete: 'set null' }),
   usageCount: integer('usage_count').notNull().default(1),
   updatedAt: updatedAt(),

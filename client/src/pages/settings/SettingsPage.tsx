@@ -4,6 +4,7 @@ import { TopBar } from '../../components/layout/TopBar'
 import { toast } from '../../components/shared/Toast'
 import { useAuthStore } from '../../store/authStore'
 import { usePrefsStore } from '../../store/prefsStore'
+import { ALLERGENS, ALLERGEN_LABELS } from '../../types'
 import { api, getErrorMessage } from '../../lib/api'
 import { GoogleButton } from '../../components/auth/GoogleButton'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
@@ -19,7 +20,7 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
   const { permission, subscribing, subscribe, unsubscribe } = usePushNotifications()
-  const { dailyDozenEnabled, setDailyDozenEnabled } = usePrefsStore()
+  const { dailyDozenEnabled, setDailyDozenEnabled, avoidAllergens, toggleAvoidAllergen } = usePrefsStore()
 
   const hasPassword = user?.hasPassword !== false
 
@@ -208,6 +209,30 @@ export function SettingsPage() {
                 }`}
               />
             </button>
+          </div>
+        </div>
+
+        {/* Allergens to avoid */}
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card p-5 space-y-3">
+          <div>
+            <p className="font-headline font-bold text-on-surface">Allergens to avoid</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              Recipes containing these get a warning. Detected automatically from the ingredients — always check labels.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {ALLERGENS.map((a) => (
+              <button
+                key={a}
+                onClick={() => toggleAvoidAllergen(a)}
+                aria-pressed={avoidAllergens.includes(a)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                  avoidAllergens.includes(a) ? 'bg-error text-on-error' : 'bg-surface-container text-on-surface-variant'
+                }`}
+              >
+                {ALLERGEN_LABELS[a]}
+              </button>
+            ))}
           </div>
         </div>
 

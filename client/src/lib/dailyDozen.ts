@@ -207,9 +207,16 @@ export interface IngredientInput {
   name: string
   quantity?: number | null
   unit?: string | null
+  /** Jev-assigned Daily Dozen group (or 'none'); when present it replaces keyword matching. */
+  foodGroup?: string | null
 }
 
+const GROUP_IDS = new Set<string>(DAILY_DOZEN.map((d) => d.id))
+
 function classifyIngredient(ing: IngredientInput): Set<DailyDozenId> {
+  if (ing.foodGroup) {
+    return GROUP_IDS.has(ing.foodGroup) ? new Set([ing.foodGroup as DailyDozenId]) : new Set()
+  }
   if (SOY_MILK_RE.test(ing.name.toLowerCase())) {
     const found = classifyText(ing.name.replace(SOY_MILK_RE, ''))
     const ml = ing.quantity != null && ing.unit ? unitToMl(ing.quantity, ing.unit) : null
@@ -236,8 +243,11 @@ export function classifyDay(meals: MealClassificationInput[]): Set<DailyDozenId>
   const add = (s: Set<DailyDozenId>) => { for (const id of s) found.add(id) }
 
   for (const meal of meals) {
-    if (meal.recipeTitle) add(classifyText(meal.recipeTitle))
-    for (const ing of meal.ingredients ?? []) add(classifyIngredient(ing))
+    // Title keywords are only a fallback for recipes whose ingredients haven't all been classified
+    const ings = meal.ingredients ?? []
+    const covered = ings.length > 0 && ings.every((i) => i.foodGroup)
+    if (meal.recipeTitle && !covered) add(classifyText(meal.recipeTitle))
+    for (const ing of ings) add(classifyIngredient(ing))
     if (meal.noteText) add(classifyText(meal.noteText))
     if (meal.dayNote) add(classifyText(meal.dayNote))
   }

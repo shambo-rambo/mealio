@@ -15,7 +15,8 @@ import { queryKeys } from '../../lib/queryKeys'
 import { api } from '../../lib/api'
 import { DAILY_DOZEN, classifyDay, type DailyDozenId } from '../../lib/dailyDozen'
 import { usePrefsStore } from '../../store/prefsStore'
-import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult } from '../../types'
+import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult, LibrarySuggestion } from '../../types'
+import { AllergenWarning } from '../../components/shared/AllergenWarning'
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -319,10 +320,14 @@ function getOpener() {
 type DisplayMsg =
   | { kind: 'text'; role: 'user' | 'assistant'; content: string }
   | { kind: 'recipe'; importResult: RecipeImportResult }
+  | { kind: 'library'; recipes: LibrarySuggestion[] }
 
 function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealLabel: MealLabel; onClose: () => void }) {
   const navigate = useNavigate()
   const suggest = useSuggestMealMutation()
+  const addMeal = useAddMealMutation()
+  const { data: allRecipes = [] } = useRecipesQuery()
+  const [shownIds, setShownIds] = useState<string[]>([])
 
   // displayMsgs drives the UI; apiMsgs is what goes to the server (text-only)
   const opener = getOpener()
@@ -341,6 +346,14 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
       const msg: SuggestMessage = { role: 'assistant', content: data.text }
       setDisplayMsgs((prev) => [...prev, { kind: 'text', ...msg }])
       setApiMsgs((prev) => [...prev, msg])
+    } else if (data.type === 'library') {
+      // Matches from the family's own recipes — offered before writing anything new
+      setDisplayMsgs((prev) => [...prev, { kind: 'library', recipes: data.recipes }])
+      setApiMsgs((prev) => [
+        ...prev,
+        { role: 'assistant', content: `From your saved recipes I'd suggest: ${data.recipes.map((r) => r.title).join(', ')}. Do any of these work?` },
+      ])
+      setShownIds((prev) => [...prev, ...data.recipes.map((r) => r.id)])
     } else {
       const { importResult } = data
       // Add a rich recipe card to the display, and a text summary to the API context
@@ -368,7 +381,7 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
     const nextApi = [...apiMsgs, userMsg]
     setApiMsgs(nextApi)
     setInput('')
-    suggest.mutate({ mealLabel, messages: nextApi }, { onSuccess: handleResponse })
+    suggest.mutate({ mealLabel, messages: nextApi, shownRecipeIds: shownIds }, { onSuccess: handleResponse })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -376,6 +389,26 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  const addLibraryRecipe = async (recipeId: string) => {
+    if (!date) return
+    try {
+      await addMeal.mutateAsync({ date, mealLabel, recipeId })
+      toast.success('Added to plan')
+      onClose()
+    } catch {
+      toast.error('Could not add to plan')
+    }
+  }
+
+  const wantSomethingNew = () => {
+    if (suggest.isPending) return
+    const userMsg: SuggestMessage = { role: 'user', content: 'None of those — write me something new.' }
+    setDisplayMsgs((prev) => [...prev, { kind: 'text', ...userMsg }])
+    const nextApi = [...apiMsgs, userMsg]
+    setApiMsgs(nextApi)
+    suggest.mutate({ mealLabel, messages: nextApi, shownRecipeIds: shownIds, forceGenerate: true }, { onSuccess: handleResponse })
   }
 
   const handleAddRecipe = () => {
@@ -391,7 +424,43 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
       {/* Chat log */}
       <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar pt-1">
         {displayMsgs.map((msg, i) =>
-          msg.kind === 'recipe' ? (
+          msg.kind === 'library' ? (
+            // ── Saved-recipe matches ────────────────────────────────────────
+            <div key={i} className="space-y-2 max-w-[92%]">
+              {msg.recipes.map((r) => {
+                const full = allRecipes.find((x) => x.id === r.id)
+                const mins = (r.prepTime ?? 0) + (r.cookTime ?? 0)
+                return (
+                  <div key={r.id} className="bg-surface-container-low border border-outline-variant rounded-2xl p-3 flex items-center gap-3">
+                    {r.pictureUrl ? (
+                      <img src={r.pictureUrl} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-on-surface-variant/50">restaurant_menu</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-headline font-bold text-on-surface text-sm leading-snug truncate">{r.title}</p>
+                      <p className="text-xs text-on-surface-variant">
+                        {[mins > 0 && `${mins} min`, r.effort, r.protein && r.protein !== 'none' ? r.protein : null].filter(Boolean).join(' · ')}
+                      </p>
+                      <AllergenWarning allergens={full?.allergens} compact />
+                    </div>
+                    <button
+                      onClick={() => addLibraryRecipe(r.id)}
+                      disabled={addMeal.isPending}
+                      className="px-3 py-1.5 rounded-full bg-primary text-on-primary text-xs font-bold flex-shrink-0 disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )
+              })}
+              <button onClick={wantSomethingNew} className="text-xs font-bold text-primary px-1 py-1">
+                None of these — write me something new
+              </button>
+            </div>
+          ) : msg.kind === 'recipe' ? (
             // ── Recipe card bubble ──────────────────────────────────────────
             <div key={i} className="flex justify-start">
               <div className="bg-surface-container-low border border-outline-variant rounded-2xl rounded-bl-sm p-4 space-y-2 max-w-[90%]">

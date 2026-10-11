@@ -42,7 +42,7 @@ export function useDayPlans(start: string, end: string, enabled = true) {
         dayEntries.map((e) => ({
           recipeTitle: e.recipe?.title,
           ingredients: e.recipeId
-            ? (recipes[e.recipeId]?.ingredients?.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit })) ?? [])
+            ? (recipes[e.recipeId]?.ingredients?.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit, foodGroup: i.foodGroup })) ?? [])
             : [],
           noteText: e.noteText,
           dayNote: e.dayNote,
