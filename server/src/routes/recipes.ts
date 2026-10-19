@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   recipes, ingredients, recipeSteps, recipeRatings,
@@ -9,8 +9,9 @@ import { authMiddleware } from '../middleware/auth.js'
 import {
   parseRecipeFromUrl, parseRecipeFromText, parseRecipeFromPhoto,
   parseRecipeFromSocialVideo,
-  generateDietaryTags, estimateNutrition, withNutrition,
+  estimateNutrition, withNutrition,
 } from '../lib/ai.js'
+import { classifyRecipe, classifyIngredientGroups } from '../lib/classify.js'
 import { detectPlatform } from '../lib/detect.js'
 import { fetchInstagramData } from '../lib/extractors/instagram.js'
 import { fetchTikTokData } from '../lib/extractors/tiktok.js'
@@ -28,6 +29,62 @@ function inChunks<T>(arr: T[], colsPerRow: number): T[][] {
   const result: T[][] = []
   for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size))
   return result
+}
+
+
+// ── Jev classification ────────────────────────────────────────────────────────
+
+function parseAllergens(raw: string | null): string[] {
+  if (!raw) return []
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+/** Presentation shape: allergens as an array. */
+function withParsedAllergens<T extends { allergens: string | null }>(r: T) {
+  return { ...r, allergens: parseAllergens(r.allergens) }
+}
+
+const classifying = new Set<string>()
+
+/**
+ * Tags a recipe with Jev (dietary/allergens/meal type/effort/protein/cuisine/kid-friendly) and files each
+ * ingredient under its Daily Dozen group. Fails soft. `setTags` replaces the dietary-tag rows with Jev's.
+ */
+async function classifyAndStore(db: AppDB, apiKey: string, recipeId: string, setTags: boolean) {
+  if (classifying.has(recipeId)) return
+  classifying.add(recipeId)
+  try {
+    const recipe = await db.query.recipes.findFirst({ where: eq(recipes.id, recipeId) })
+    const ings = await db.query.ingredients.findMany({ where: eq(ingredients.recipeId, recipeId), orderBy: (t, { asc }) => [asc(t.sortOrder)] })
+    if (!recipe || ings.length === 0) return
+    const names = ings.map((i) => i.name)
+    const [cls, groups] = await Promise.all([
+      classifyRecipe(recipe.title, names, apiKey, recipe.prepTime, recipe.cookTime),
+      classifyIngredientGroups(recipe.title, names, apiKey),
+    ])
+    if (cls) {
+      await db.update(recipes).set({
+        mealType: cls.mealType ?? 'dinner',
+        effort: cls.effort,
+        protein: cls.protein,
+        cuisine: cls.cuisine,
+        kidFriendly: cls.kidFriendly,
+        allergens: JSON.stringify(cls.allergens),
+      }).where(eq(recipes.id, recipeId))
+      if (setTags) {
+        await db.delete(dietaryTags).where(eq(dietaryTags.recipeId, recipeId))
+        if (cls.dietaryTags.length) await db.insert(dietaryTags).values(cls.dietaryTags.map((tag) => ({ recipeId, tag })))
+      }
+    }
+    const updates = ings.flatMap((ing, i) =>
+      groups[i] ? [db.update(ingredients).set({ foodGroup: groups[i] }).where(eq(ingredients.id, ing.id))] : [],
+    )
+    if (updates.length) await db.batch(updates as [typeof updates[0], ...typeof updates])
+  } catch (err) {
+    console.error('recipe classification failed', recipeId, err)
+  } finally {
+    classifying.delete(recipeId)
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -55,7 +112,7 @@ async function getRecipeFull(db: AppDB, id: string, userId: string) {
   const userRating = ratings.find((r) => r.userId === userId)?.rating ?? null
 
   return {
-    ...recipe,
+    ...withParsedAllergens(recipe),
     ingredients: ings,
     steps,
     ratings,
@@ -96,7 +153,7 @@ recipesRoutes.get('/', async (c) => {
       ])
       const avg = ratings.length ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : null
       return {
-        ...recipe,
+        ...withParsedAllergens(recipe),
         averageRating: avg,
         userRating: ratings.find((r) => r.userId === userId)?.rating ?? null,
         dietaryTags: tags.map((t) => t.tag),
@@ -105,7 +162,24 @@ recipesRoutes.get('/', async (c) => {
     })
   )
 
+  // Lazily tag recipes saved before Jev classification existed (a few per visit, off the request path)
+  const untagged = recipeList.filter((r) => r.mealType == null).slice(0, 4)
+  if (untagged.length) {
+    try {
+      c.executionCtx.waitUntil(
+        (async () => { for (const r of untagged) await classifyAndStore(db, c.env.TYPESAFE_API_KEY, r.id, true) })(),
+      )
+    } catch { /* no execution context (tests) */ }
+  }
+
   let filtered = withMeta
+  const q = c.req.query()
+  if (q.mealType) filtered = filtered.filter((r) => r.mealType === q.mealType)
+  if (q.effort) filtered = filtered.filter((r) => r.effort === q.effort)
+  if (q.protein) filtered = filtered.filter((r) => r.protein === q.protein)
+  if (q.cuisine) filtered = filtered.filter((r) => r.cuisine === q.cuisine)
+  if (q.kid === '1') filtered = filtered.filter((r) => r.kidFriendly === true)
+  if (q.maxTime) filtered = filtered.filter((r) => (r.prepTime ?? 0) + (r.cookTime ?? 0) <= Number(q.maxTime))
   if (tag) filtered = filtered.filter((r) => r.dietaryTags.includes(tag as any))
   if (collectionId) {
     const memberships = await db.query.recipeCollections.findMany({
@@ -206,6 +280,8 @@ recipesRoutes.post('/', async (c) => {
     for (const chunk of inChunks(rows, 2)) await db.insert(recipeCollections).values(chunk)
   }
 
+  await classifyAndStore(db, c.env.TYPESAFE_API_KEY, recipeId, !tags?.length)
+
   const recipe = await getRecipeFull(db, recipeId, userId)
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId, { type: 'recipe:created', recipeId })
   return c.json({ recipe }, 201)
@@ -225,7 +301,29 @@ recipesRoutes.patch('/:id', async (c) => {
   const result = recipeBodySchema.partial().safeParse(body)
   if (!result.success) return c.json({ error: { code: 'validation_error', message: result.error.issues[0].message } }, 400)
 
-  const { ingredients: ings, steps, dietaryTags: tags, nutrition: nut, collectionIds, ...recipeData } = result.data
+  const { ingredients: ings, steps, dietaryTags: tags, nutrition: nutIn, collectionIds, ...recipeData } = result.data
+
+  // Recalculate nutrition when the ingredients or servings changed, unless the user hand-edited the calorie figure.
+  let nut = nutIn
+  const servingsChanged = recipeData.servings != null && recipeData.servings !== existing.servings
+  if (ings || servingsChanged) {
+    const [oldIngs, oldNut] = await Promise.all([
+      db.query.ingredients.findMany({ where: eq(ingredients.recipeId, id) }),
+      db.query.nutrition.findFirst({ where: eq(nutrition.recipeId, id) }),
+    ])
+    const sig = (l: Array<{ name: string; quantity?: number | null; unit?: string | null }>) =>
+      JSON.stringify(l.map((i) => [i.name.trim().toLowerCase(), i.quantity ?? null, (i.unit ?? '').trim().toLowerCase()]))
+    const ingsChanged = !!ings && sig(ings) !== sig([...oldIngs].sort((a, b) => a.sortOrder - b.sortOrder))
+    const handEdited = nutIn != null && nutIn.calories != null && nutIn.calories !== (oldNut?.calories ?? null)
+    if ((ingsChanged || servingsChanged) && !handEdited) {
+      const est = await estimateNutrition(
+        (ings ?? oldIngs).map((i) => ({ name: i.name, quantity: i.quantity ?? null, unit: i.unit ?? null })),
+        recipeData.servings ?? existing.servings,
+        c.env.AI_GATEWAY_API_KEY,
+      )
+      if (est) nut = est
+    }
+  }
 
   if (Object.keys(recipeData).length) await db.update(recipes).set(recipeData).where(eq(recipes.id, id))
   if (ings) {
@@ -259,6 +357,10 @@ recipesRoutes.patch('/:id', async (c) => {
       const rows = collectionIds.map((cid) => ({ recipeId: id, collectionId: cid }))
       for (const chunk of inChunks(rows, 2)) await db.insert(recipeCollections).values(chunk)
     }
+  }
+
+  if (ings || recipeData.title || recipeData.prepTime !== undefined || recipeData.cookTime !== undefined) {
+    await classifyAndStore(db, c.env.TYPESAFE_API_KEY, id, false)
   }
 
   const recipe = await getRecipeFull(db, id, userId)
@@ -308,6 +410,7 @@ recipesRoutes.post('/import', async (c) => {
 
   const { type, payload, mediaType } = result.data
   const anthropicKey = c.env.ANTHROPIC_API_KEY
+  const jevKey = c.env.TYPESAFE_API_KEY
   try {
     let parsed
     if (type === 'url') {
@@ -316,23 +419,26 @@ recipesRoutes.post('/import', async (c) => {
         const igToken = c.env.INSTAGRAM_TOKEN
         if (!igToken) return c.json({ error: { code: 'import_failed', message: 'Instagram import not configured' } }, 502)
         const igData = await fetchInstagramData(payload, igToken)
-        parsed = { ...await parseRecipeFromSocialVideo(igData, payload, anthropicKey), thumbnailUrl: igData.thumbnailUrl ?? null }
+        parsed = { ...await parseRecipeFromSocialVideo(igData, payload, anthropicKey, jevKey), thumbnailUrl: igData.thumbnailUrl ?? null }
       } else if (platform === 'tiktok') {
         const ttData = await fetchTikTokData(payload)
-        parsed = { ...await parseRecipeFromSocialVideo(ttData, payload, anthropicKey), thumbnailUrl: ttData.thumbnailUrl ?? null }
+        parsed = { ...await parseRecipeFromSocialVideo(ttData, payload, anthropicKey, jevKey), thumbnailUrl: ttData.thumbnailUrl ?? null }
       } else if (platform === 'youtube') {
         const key = c.env.YOUTUBE_API_KEY
         if (!key) return c.json({ error: { code: 'import_failed', message: 'YouTube import not configured' } }, 502)
         const ytData = await fetchYouTubeData(payload, key)
-        parsed = { ...await parseRecipeFromSocialVideo(ytData, payload, anthropicKey), thumbnailUrl: ytData.thumbnailUrl ?? null }
+        parsed = { ...await parseRecipeFromSocialVideo(ytData, payload, anthropicKey, jevKey), thumbnailUrl: ytData.thumbnailUrl ?? null }
       } else {
-        parsed = await parseRecipeFromUrl(payload, anthropicKey)
+        parsed = await parseRecipeFromUrl(payload, anthropicKey, jevKey)
       }
     } else if (type === 'photo') {
       parsed = await parseRecipeFromPhoto(payload, mediaType ?? 'image/jpeg', anthropicKey)
     } else {
-      parsed = await parseRecipeFromText(payload, anthropicKey)
+      parsed = await parseRecipeFromText(payload, anthropicKey, jevKey)
     }
+    // Dietary tags come from Jev (faster and cheaper than Haiku); keep the parsed ones if Jev is unavailable
+    const cls = await classifyRecipe(parsed.title, parsed.ingredients.map((i) => i.name), jevKey, parsed.prepTime, parsed.cookTime)
+    if (cls) parsed = { ...parsed, dietaryTags: cls.dietaryTags }
     return c.json({ result: await withNutrition(parsed, c.env.AI_GATEWAY_API_KEY) })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Import failed'

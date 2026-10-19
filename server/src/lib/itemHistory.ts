@@ -26,6 +26,7 @@ export async function upsertItemHistory(
   name: string,
   category: string | null,
   storeId: string | null,
+  aisle: string | null = null,
 ) {
   const nameLower = name.toLowerCase().trim()
   const existing = await findHistory(db, familyId, name)
@@ -34,11 +35,12 @@ export async function upsertItemHistory(
     await db.update(itemHistory).set({
       usageCount: existing.usageCount + 1,
       category: category ?? existing.category,
+      aisle: aisle ?? existing.aisle,
       storeId: storeId ?? existing.storeId,
       updatedAt: new Date().toISOString(),
     }).where(eq(itemHistory.id, existing.id))
   } else {
-    await db.insert(itemHistory).values({ familyId, name: name.trim(), nameLower, category, storeId })
+    await db.insert(itemHistory).values({ familyId, name: name.trim(), nameLower, category, aisle, storeId })
   }
 }
 
@@ -54,6 +56,11 @@ export async function getItemSuggestions(db: AppDB, familyId: string, query: str
 export async function getDefaultStoreForItem(db: AppDB, familyId: string, name: string) {
   const item = await findHistory(db, familyId, name)
   return item?.storeId ?? null
+}
+
+export async function getDefaultAisleForItem(db: AppDB, familyId: string, name: string) {
+  const item = await findHistory(db, familyId, name)
+  return item?.aisle ?? null
 }
 
 export async function getDefaultCategoryForItem(db: AppDB, familyId: string, name: string) {
