@@ -181,7 +181,7 @@ function DayAgenda({
 }) {
   const order = (e: MealPlanEntry) => MEAL_LABELS.indexOf(e.mealLabel)
   const sorted = [...entries].sort((a, b) => order(a) - order(b))
-  // Snacks can be added any number of times, so the Snack pill is always there.
+  // Once breakfast, lunch and dinner are planned, "Add another" covers extra snacks (pick Snack in the sheet).
   const emptyMeals = MEAL_LABELS.filter((slot) => slot !== 'snack' && !entries.some((e) => e.mealLabel === slot))
   const kcalEntries = entries.map(entryKcal)
   const totalKcal = kcalEntries.reduce<number>((sum, k) => sum + (k ?? 0), 0)
@@ -208,7 +208,7 @@ function DayAgenda({
         {emptyMeals.map((slot) => (
           <AddSlotPill key={slot} label={slot} onClick={() => onAdd(slot)} />
         ))}
-        <AddSlotPill label="snack" onClick={() => onAdd('snack')} />
+        {emptyMeals.length > 0 && <AddSlotPill label="snack" onClick={() => onAdd('snack')} />}
         {emptyMeals.length === 0 && (
           <button
             onClick={() => onAdd()}
