@@ -176,6 +176,7 @@ export interface MealPlanEntry {
   recipeId: string | null
   noteText: string | null
   calories: number | null // kcal for notes (AI estimate, editable); recipes use recipe.calories
+  sideOf: string | null // id of the meal this is a side dish of
   dayNote: string | null
   isRecurring: boolean
   recurrenceRule: string | null

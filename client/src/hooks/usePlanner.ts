@@ -22,6 +22,7 @@ export function useAddMealMutation() {
       recipeId?: string | null
       noteText?: string | null
       calories?: number | null
+      sideOf?: string | null
       isRecurring?: boolean
       recurrenceRule?: string | null
     }) => api.post<{ entry: MealPlanEntry }>('/meal-plan', data).then((r) => r.data.entry),

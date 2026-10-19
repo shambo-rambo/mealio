@@ -13,9 +13,9 @@ export const mealPlanRoutes = new Hono<AppEnv>()
 mealPlanRoutes.use('*', authMiddleware)
 
 // D1 caps bound parameters at 100 per statement. The meal_plan table has 11
-// columns, so we can safely insert floor(99/12) = 8 rows per statement.
-const MEAL_PLAN_COLS = 12
-const CHUNK_SIZE = Math.max(1, Math.floor(99 / MEAL_PLAN_COLS)) // 8
+// columns, so we can safely insert floor(99/13) = 7 rows per statement.
+const MEAL_PLAN_COLS = 13
+const CHUNK_SIZE = Math.max(1, Math.floor(99 / MEAL_PLAN_COLS)) // 7
 
 function inChunks<T>(arr: T[]): T[][] {
   const result: T[][] = []
@@ -67,16 +67,38 @@ const mealPlanBodySchema = z.object({
   recurrenceRule: z.string().nullable().optional(),
 })
 
+const mealPlanCreateSchema = mealPlanBodySchema.extend({ sideOf: z.string().nullable().optional() })
+
+/** Sides live and die with the entry they belong to. */
+async function deleteSidesOf(db: AppEnv['Variables']['db'], ids: string[]) {
+  for (let i = 0; i < ids.length; i += 50) {
+    await db.delete(mealPlan).where(inArray(mealPlan.sideOf, ids.slice(i, i + 50)))
+  }
+}
+
 mealPlanRoutes.post('/', async (c) => {
   const db = c.get('db')
   const { familyId, userId } = c.get('user')
   if (!familyId) return c.json({ error: { code: 'no_family', message: 'Not in a family' } }, 400)
 
   const body = await c.req.json().catch(() => null)
-  const result = mealPlanBodySchema.safeParse(body)
+  const result = mealPlanCreateSchema.safeParse(body)
   if (!result.success) return c.json({ error: { code: 'validation_error', message: result.error.issues[0].message } }, 400)
 
-  const { date, mealLabel, recipeId, noteText, dayNote, isRecurring, recurrenceRule } = result.data
+  const { recipeId, noteText, dayNote } = result.data
+  let { date, mealLabel, isRecurring, recurrenceRule } = result.data
+  const sideOf = result.data.sideOf ?? null
+  if (sideOf) {
+    // A side sits in its meal's day and slot and never repeats on its own.
+    const parent = await db.query.mealPlan.findFirst({ where: eq(mealPlan.id, sideOf) })
+    if (!parent || parent.familyId !== familyId || parent.sideOf) {
+      return c.json({ error: { code: 'validation_error', message: 'Meal not found' } }, 400)
+    }
+    date = parent.date
+    mealLabel = parent.mealLabel
+    isRecurring = false
+    recurrenceRule = null
+  }
 
   // Notes carry their own calorie figure: the user's, or an AI estimate when none was given.
   const calories = recipeId ? null
@@ -86,7 +108,7 @@ mealPlanRoutes.post('/', async (c) => {
   const entryId = crypto.randomUUID()
   const [entry] = await db.insert(mealPlan).values({
     id: entryId, familyId, date, mealLabel,
-    recipeId: recipeId ?? null, noteText: noteText ?? null, calories, dayNote: dayNote ?? null,
+    recipeId: recipeId ?? null, noteText: noteText ?? null, calories, dayNote: dayNote ?? null, sideOf,
     isRecurring: isRecurring ?? false, recurrenceRule: recurrenceRule ?? null,
     parentId: null, createdBy: userId,
   }).returning()
@@ -149,12 +171,18 @@ mealPlanRoutes.patch('/:id', async (c) => {
     const allSeries = await db.query.mealPlan.findMany({
       where: and(eq(mealPlan.parentId, entry.parentId), gte(mealPlan.date, entry.date)),
     })
+    if (update.mealLabel) {
+      for (const sid of [id, ...allSeries.map((e) => e.id)]) {
+        await db.update(mealPlan).set({ mealLabel: update.mealLabel }).where(eq(mealPlan.sideOf, sid))
+      }
+    }
     await Promise.all([
       db.update(mealPlan).set(update).where(eq(mealPlan.id, id)),
       ...allSeries.map((e) => db.update(mealPlan).set(update).where(eq(mealPlan.id, e.id))),
     ])
   } else {
     await db.update(mealPlan).set(update).where(eq(mealPlan.id, id))
+    if (update.mealLabel) await db.update(mealPlan).set({ mealLabel: update.mealLabel }).where(eq(mealPlan.sideOf, id))
   }
 
   // Recalculate future recurring entries whenever the recurrence settings change.
@@ -165,6 +193,8 @@ mealPlanRoutes.patch('/:id', async (c) => {
     : entry.recurrenceRule
 
   // Always wipe existing children first — handles rule changes and turning off recurrence.
+  const children = await db.query.mealPlan.findMany({ where: eq(mealPlan.parentId, id), columns: { id: true } })
+  await deleteSidesOf(db, children.map((e) => e.id))
   await db.delete(mealPlan).where(eq(mealPlan.parentId, id))
 
   if (newIsRecurring && newRecurrenceRule) {
@@ -208,11 +238,17 @@ mealPlanRoutes.delete('/:id', async (c) => {
   }
 
   if (scope === 'series' && entry.parentId) {
+    const series = await db.query.mealPlan.findMany({
+      where: and(eq(mealPlan.parentId, entry.parentId), gte(mealPlan.date, entry.date)),
+      columns: { id: true },
+    })
+    await deleteSidesOf(db, series.map((e) => e.id))
     await db.delete(mealPlan).where(
       and(eq(mealPlan.parentId, entry.parentId), gte(mealPlan.date, entry.date))
     )
   }
 
+  await deleteSidesOf(db, [id])
   await db.delete(mealPlan).where(eq(mealPlan.id, id))
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'meal-plan:updated', familyId: familyId! })
   return c.json({ ok: true })

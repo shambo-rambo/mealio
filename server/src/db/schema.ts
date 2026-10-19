@@ -229,6 +229,8 @@ export const mealPlan = sqliteTable('meal_plan', {
   noteText: text('note_text'),
   // AI-estimated (editable) kcal for note entries; recipe entries use the recipe's per-serving nutrition.
   calories: integer('calories'),
+  // Set when this entry is a side dish belonging to another entry (same day and slot).
+  sideOf: text('side_of'),
   dayNote: text('day_note'),
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
   recurrenceRule: text('recurrence_rule'),
