@@ -106,22 +106,29 @@ function addDaysIso(iso: string, n: number) {
   return toLocalIso(d)
 }
 
-/** Daily Dozen goals follow the meal plan with no input from the user: each day's count is saved automatically. */
-function useAutoDozen(data: StreaksData | undefined, plans: Plans, loading: boolean) {
+/** The figure the meal plan gives an automatic goal for a day (null when it has nothing to say). */
+function planValue(goal: StreakGoal, plan: Plans[string] | undefined): number {
+  return goal.type === 'calories' ? plan?.calories ?? 0 : plan?.categories.size ?? 0
+}
+
+/** Calorie and Daily Dozen goals follow the meal plan with no input from the user: each day's figure is saved automatically. */
+function useAutoGoals(data: StreaksData | undefined, plans: Plans, loading: boolean) {
   const { mutate } = useCheckinMutation()
   const sent = useRef(new Set<string>())
   useEffect(() => {
     if (!data || loading) return
     const byDate: Record<string, CheckinEntry[]> = {}
     for (const g of data.goals) {
-      if (g.type !== 'daily_dozen') continue
+      if (g.type === 'custom') continue
       for (let i = 0; i < 7; i++) {
         const date = addDaysIso(data.today, -i)
         if (date < g.createdDate) continue
-        const count = plans[date]?.categories.size ?? 0
+        const count = planValue(g, plans[date])
         const prev = data.checkins.find((c) => c.goalId === g.id && c.date === date)
         // Today only gets recorded once it's met (or to correct an earlier result); past days are final, even at 0.
-        const needs = prev ? prev.value !== count : i > 0 || meetsGoal(g, count)
+        // A calorie day with nothing planned has nothing to judge, so it isn't recorded until something is.
+        const fresh = g.type === 'calories' && count === 0 ? false : i > 0 || meetsGoal(g, count)
+        const needs = prev ? prev.value !== count : fresh
         const key = `${g.id}|${date}|${count}`
         if (needs && !sent.current.has(key)) {
           sent.current.add(key)
@@ -136,7 +143,6 @@ function useAutoDozen(data: StreaksData | undefined, plans: Plans, loading: bool
 function GoalCheck({ goal, date, data, plan }: { goal: StreakGoal; date: string; data: StreaksData; plan: Plans[string] | undefined }) {
   const existing = data.checkins.find((c) => c.goalId === goal.id && c.date === date)
   const checkin = useCheckinMutation()
-  const [kcal, setKcal] = useState(existing?.value != null ? String(Math.round(existing.value)) : plan && plan.calories > 0 ? String(plan.calories) : '')
   const save = (entry: Omit<CheckinEntry, 'goalId'>, msg: string) =>
     checkin.mutate({ date, entries: [{ goalId: goal.id, ...entry }] }, {
       onSuccess: () => toast.success(msg),
@@ -189,25 +195,23 @@ function GoalCheck({ goal, date, data, plan }: { goal: StreakGoal; date: string;
       })()}
 
       {goal.type === 'calories' && (() => {
-        const n = kcal === '' ? null : Number(kcal)
-        const ok = meetsGoal(goal, n)
+        const total = plan?.calories ?? 0
+        const ok = total > 0 && meetsGoal(goal, total)
+        const target = Math.round(goal.target ?? 0)
+        const diff = Math.abs(target - total)
         return (
           <>
-            <div className="flex items-center gap-2">
-              <input inputMode="numeric" type="number" min={0} value={kcal} placeholder="0" onChange={(e) => setKcal(e.target.value)} className={fieldCls} />
-              <span className="text-sm text-on-surface-variant whitespace-nowrap">kcal</span>
-            </div>
-            <p className={`text-sm font-semibold ${n == null ? 'text-on-surface-variant' : ok ? 'text-primary' : 'text-error'}`}>
-              Goal: {goal.comparator === 'lte' ? 'at most' : 'at least'} {Math.round(goal.target ?? 0)} kcal{n != null && (ok ? ' · on track ✓' : ' · not met')}
+            <p className={`text-sm font-semibold ${total === 0 ? 'text-on-surface-variant' : ok ? 'text-primary' : 'text-error'}`}>
+              {total} kcal planned · goal {goal.comparator === 'lte' ? 'under' : 'at least'} {target}
+              {total > 0 && (goal.comparator === 'lte'
+                ? ok ? ` · ${diff} left ✓` : ` · ${diff} over`
+                : ok ? ' ✓' : ` · ${diff} to go`)}
             </p>
             <p className="text-xs text-on-surface-variant">
               {plan && plan.meals > 0
-                ? `Meal plan total: ${plan.calories} kcal (one serving of each planned recipe)${plan.uncounted ? `, not counting ${plan.uncounted} meal${plan.uncounted > 1 ? 's' : ''} without calorie info` : ''}. Adjust if you ate more or less.`
-                : 'Nothing planned for this day, so enter what you ate.'}
+                ? `Automatic: totalled from your meal plan (one serving of each meal and snack)${plan.uncounted ? `, not counting ${plan.uncounted} without calorie info` : ''}. Change the plan to change it.`
+                : 'Automatic: nothing planned for this day yet. Add meals or snacks to the plan.'}
             </p>
-            <button disabled={n == null || Number.isNaN(n) || checkin.isPending} onClick={() => save({ value: n! }, 'Saved')} className={primaryBtn}>
-              {checkin.isPending ? 'Saving…' : existing ? 'Update' : 'Confirm'}
-            </button>
           </>
         )
       })()}
@@ -253,7 +257,7 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
 
   const types: { id: GoalType; label: string; hint: string }[] = [
     { id: 'custom', label: 'My own goal', hint: 'Tick it off whenever you do it' },
-    { id: 'calories', label: 'Calories', hint: 'Worked out from your meal plan' },
+    { id: 'calories', label: 'Daily calorie limit', hint: 'Automatic from your meal plan' },
     { id: 'daily_dozen', label: 'Daily Dozen foods', hint: 'Automatic from your meal plan' },
   ]
 
@@ -310,7 +314,7 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
             <input inputMode="numeric" type="number" value={kcal} onChange={(e) => setKcal(e.target.value)} className={fieldCls} />
             <span className="text-sm text-on-surface-variant whitespace-nowrap">kcal/day</span>
           </div>
-          <p className="text-xs text-on-surface-variant">We total the calories on your meal plan and you confirm the figure when you're ready.</p>
+          <p className="text-xs text-on-surface-variant">Fully automatic: we total the calories on your meal plan (meals, notes and snacks). Nothing to tick or confirm.</p>
         </div>
       )}
 
@@ -327,9 +331,9 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
   )
 }
 
-/** Goals the user still has to answer for a day. Daily Dozen is automatic, so it never counts. */
+/** Goals the user still has to answer for a day. Calorie and Daily Dozen goals are automatic, so they never count. */
 function pendingFor(data: StreaksData, date: string) {
-  return data.goals.filter((g) => g.type !== 'daily_dozen' && g.createdDate <= date && !data.checkins.some((c) => c.goalId === g.id && c.date === date))
+  return data.goals.filter((g) => g.type === 'custom' && g.createdDate <= date && !data.checkins.some((c) => c.goalId === g.id && c.date === date))
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -337,9 +341,9 @@ function pendingFor(data: StreaksData, date: string) {
 export function StreaksPage() {
   const { data, isLoading, isError, refetch } = useStreaksQuery()
   const del = useDeleteGoalMutation()
-  const hasDozen = !!data?.goals.some((g) => g.type === 'daily_dozen')
-  const { plans, loading: plansLoading } = useDayPlans(data ? addDaysIso(data.today, -6) : '', data?.today ?? '', hasDozen)
-  useAutoDozen(data, plans, plansLoading)
+  const hasAuto = !!data?.goals.some((g) => g.type !== 'custom')
+  const { plans, loading: plansLoading } = useDayPlans(data ? addDaysIso(data.today, -6) : '', data?.today ?? '', hasAuto)
+  useAutoGoals(data, plans, plansLoading)
   const [params, setParams] = useSearchParams()
   const [sheet, setSheet] = useState<{ date: string; goalId: string | null } | null>(null)
   const quick = useCheckinMutation()
@@ -415,16 +419,19 @@ export function StreaksPage() {
               </div>
               {data.goals.map((g) => {
                 const done = checkinFor(g.id, data.today)
-                const count = plans[data.today]?.categories.size ?? 0
-                const dozenOk = g.type === 'daily_dozen' && meetsGoal(g, count)
-                const good = g.type === 'daily_dozen' ? dozenOk : done?.achieved
+                const auto = g.type !== 'custom'
+                const count = planValue(g, plans[data.today])
+                const autoOk = auto && count > 0 && meetsGoal(g, count)
+                const good = auto ? autoOk : done?.achieved
                 const status = g.type === 'daily_dozen'
                   ? `${count}/${DAILY_DOZEN.length} groups today · automatic`
-                  : done ? (done.value != null ? `Confirmed: ${Math.round(done.value)} kcal` : done.achieved ? 'Done' : 'Not today') : goalSubtitle(g)
+                  : g.type === 'calories'
+                    ? `${count} of ${Math.round(g.target ?? 0)} kcal planned today · automatic`
+                    : done ? (done.achieved ? 'Done' : 'Not today') : goalSubtitle(g)
                 const circle = (
                   <span className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    good ? 'bg-primary text-on-primary' : done && g.type !== 'daily_dozen' ? 'bg-error-container text-on-error-container' : 'bg-surface-container text-primary'}`}>
-                    <span className="material-symbols-outlined text-[22px]">{good ? 'check' : done && g.type !== 'daily_dozen' ? 'close' : goalIcon[g.type]}</span>
+                    good ? 'bg-primary text-on-primary' : done && !auto ? 'bg-error-container text-on-error-container' : 'bg-surface-container text-primary'}`}>
+                    <span className="material-symbols-outlined text-[22px]">{good ? 'check' : done && !auto ? 'close' : goalIcon[g.type]}</span>
                   </span>
                 )
                 const body = (

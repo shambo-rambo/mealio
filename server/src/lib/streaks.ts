@@ -28,6 +28,8 @@ export function addDays(iso: string, n: number): string {
 export function resolveAchieved(goal: Pick<GoalLike, 'type' | 'target' | 'comparator'>, value: number | null, explicit: boolean | null): boolean {
   if (goal.type === 'custom') return explicit === true
   if (value == null || goal.target == null) return false
+  // A day with nothing logged isn't a win for a calorie goal, however low the limit.
+  if (goal.type === 'calories' && value <= 0) return false
   return goal.comparator === 'lte' ? value <= goal.target : value >= goal.target
 }
 

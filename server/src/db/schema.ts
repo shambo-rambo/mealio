@@ -224,9 +224,11 @@ export const mealPlan = sqliteTable('meal_plan', {
     .notNull()
     .references(() => families.id, { onDelete: 'cascade' }),
   date: text('date').notNull(),
-  mealLabel: text('meal_label', { enum: ['breakfast', 'lunch', 'dinner'] }).notNull(),
+  mealLabel: text('meal_label', { enum: ['breakfast', 'lunch', 'dinner', 'snack'] }).notNull(),
   recipeId: text('recipe_id').references(() => recipes.id, { onDelete: 'set null' }),
   noteText: text('note_text'),
+  // AI-estimated (editable) kcal for note entries; recipe entries use the recipe's per-serving nutrition.
+  calories: integer('calories'),
   dayNote: text('day_note'),
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
   recurrenceRule: text('recurrence_rule'),

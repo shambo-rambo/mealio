@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import type { MealPlanEntry, SuggestTurnRequest, SuggestTurnResponse } from '../types'
+import type { MealPlanEntry, MealLabel, SuggestTurnRequest, SuggestTurnResponse } from '../types'
 
 export function useMealPlanQuery(start: string, end: string) {
   return useQuery({
@@ -18,9 +18,10 @@ export function useAddMealMutation() {
   return useMutation({
     mutationFn: (data: {
       date: string
-      mealLabel: 'breakfast' | 'lunch' | 'dinner'
+      mealLabel: MealLabel
       recipeId?: string | null
       noteText?: string | null
+      calories?: number | null
       isRecurring?: boolean
       recurrenceRule?: string | null
     }) => api.post<{ entry: MealPlanEntry }>('/meal-plan', data).then((r) => r.data.entry),
@@ -60,8 +61,8 @@ export function groupByDate(entries: MealPlanEntry[]): Record<string, MealPlanEn
     if (!grouped[entry.date]) grouped[entry.date] = []
     grouped[entry.date].push(entry)
   }
-  // Sort each day: breakfast, lunch, dinner
-  const order = { breakfast: 0, lunch: 1, dinner: 2 }
+  // Sort each day: breakfast, lunch, dinner, then snacks
+  const order: Record<MealLabel, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 }
   for (const date of Object.keys(grouped)) {
     grouped[date].sort((a, b) => order[a.mealLabel] - order[b.mealLabel])
   }

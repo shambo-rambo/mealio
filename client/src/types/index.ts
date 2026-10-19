@@ -166,7 +166,7 @@ export interface Recipe {
   calories?: number | null // per serving; included on list responses
 }
 
-export type MealLabel = 'breakfast' | 'lunch' | 'dinner'
+export type MealLabel = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
 export interface MealPlanEntry {
   id: string
@@ -175,13 +175,14 @@ export interface MealPlanEntry {
   mealLabel: MealLabel
   recipeId: string | null
   noteText: string | null
+  calories: number | null // kcal for notes (AI estimate, editable); recipes use recipe.calories
   dayNote: string | null
   isRecurring: boolean
   recurrenceRule: string | null
   parentId: string | null
   createdBy: string | null
   // Relations
-  recipe?: Pick<Recipe, 'id' | 'title' | 'pictureUrl' | 'prepTime' | 'cookTime'>
+  recipe?: Pick<Recipe, 'id' | 'title' | 'pictureUrl' | 'prepTime' | 'cookTime' | 'calories'>
 }
 
 export interface RecipeImportResult {

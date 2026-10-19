@@ -301,7 +301,29 @@ recipesRoutes.patch('/:id', async (c) => {
   const result = recipeBodySchema.partial().safeParse(body)
   if (!result.success) return c.json({ error: { code: 'validation_error', message: result.error.issues[0].message } }, 400)
 
-  const { ingredients: ings, steps, dietaryTags: tags, nutrition: nut, collectionIds, ...recipeData } = result.data
+  const { ingredients: ings, steps, dietaryTags: tags, nutrition: nutIn, collectionIds, ...recipeData } = result.data
+
+  // Recalculate nutrition when the ingredients or servings changed, unless the user hand-edited the calorie figure.
+  let nut = nutIn
+  const servingsChanged = recipeData.servings != null && recipeData.servings !== existing.servings
+  if (ings || servingsChanged) {
+    const [oldIngs, oldNut] = await Promise.all([
+      db.query.ingredients.findMany({ where: eq(ingredients.recipeId, id) }),
+      db.query.nutrition.findFirst({ where: eq(nutrition.recipeId, id) }),
+    ])
+    const sig = (l: Array<{ name: string; quantity?: number | null; unit?: string | null }>) =>
+      JSON.stringify(l.map((i) => [i.name.trim().toLowerCase(), i.quantity ?? null, (i.unit ?? '').trim().toLowerCase()]))
+    const ingsChanged = !!ings && sig(ings) !== sig([...oldIngs].sort((a, b) => a.sortOrder - b.sortOrder))
+    const handEdited = nutIn != null && nutIn.calories != null && nutIn.calories !== (oldNut?.calories ?? null)
+    if ((ingsChanged || servingsChanged) && !handEdited) {
+      const est = await estimateNutrition(
+        (ings ?? oldIngs).map((i) => ({ name: i.name, quantity: i.quantity ?? null, unit: i.unit ?? null })),
+        recipeData.servings ?? existing.servings,
+        c.env.AI_GATEWAY_API_KEY,
+      )
+      if (est) nut = est
+    }
+  }
 
   if (Object.keys(recipeData).length) await db.update(recipes).set(recipeData).where(eq(recipes.id, id))
   if (ings) {

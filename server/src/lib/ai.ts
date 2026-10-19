@@ -482,6 +482,40 @@ export async function estimateNutrition(
   }
 }
 
+/** Estimate the kcal in a free-text meal note ("2 eggs on toast", "pizza night"). Null on any failure. */
+export async function estimateNoteCalories(note: string, gatewayKey: string | undefined): Promise<number | null> {
+  const text = note.trim()
+  if (!gatewayKey || !text) return null
+  try {
+    const res = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${gatewayKey}` },
+      body: JSON.stringify({
+        model: NUTRITION_MODEL,
+        temperature: 0,
+        max_tokens: 60,
+        response_format: { type: 'json_object' },
+        messages: [{
+          role: 'user',
+          content: `Estimate the total calories (kcal) one person eats for this meal or snack, described in a note: "${text.slice(0, 500)}"\n\nAssume a typical single serving when no quantity is given. Return ONLY JSON: {"calories": number} (whole number of kcal).`,
+        }],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) {
+      console.error(`AI Gateway ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      return null
+    }
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const raw = (data.choices?.[0]?.message?.content ?? '').trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '')
+    const kcal = (JSON.parse(raw) as { calories?: unknown }).calories
+    return typeof kcal === 'number' && isFinite(kcal) && kcal >= 0 && kcal <= 10000 ? Math.round(kcal) : null
+  } catch (err) {
+    console.error('Note calorie estimate failed', err)
+    return null
+  }
+}
+
 /** Fills in nutrition on an import result when the source/AI left calories empty. */
 export async function withNutrition<T extends { servings: number; ingredients: Array<{ name: string; quantity: number | null; unit: string | null }>; nutrition?: Nutrition | null }>(
   recipe: T,

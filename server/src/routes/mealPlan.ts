@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 import { eq, and, gte, inArray } from 'drizzle-orm'
 import { z } from 'zod'
-import { mealPlan, recipes, ingredients } from '../db/schema.js'
+import { mealPlan, recipes, ingredients, nutrition } from '../db/schema.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { expandRecurrenceRule, type RecurrenceRule } from '../lib/recurrence.js'
 import { broadcastToFamily } from '../lib/ws.js'
-import { chatSuggestMeal, withNutrition } from '../lib/ai.js'
+import { chatSuggestMeal, withNutrition, estimateNoteCalories } from '../lib/ai.js'
 import { scoreLibraryRecipes } from '../lib/classify.js'
 import type { AppEnv } from '../types.js'
 
@@ -13,9 +13,9 @@ export const mealPlanRoutes = new Hono<AppEnv>()
 mealPlanRoutes.use('*', authMiddleware)
 
 // D1 caps bound parameters at 100 per statement. The meal_plan table has 11
-// columns, so we can safely insert floor(99/11) = 9 rows per statement.
-const MEAL_PLAN_COLS = 11
-const CHUNK_SIZE = Math.max(1, Math.floor(99 / MEAL_PLAN_COLS)) // 9
+// columns, so we can safely insert floor(99/12) = 8 rows per statement.
+const MEAL_PLAN_COLS = 12
+const CHUNK_SIZE = Math.max(1, Math.floor(99 / MEAL_PLAN_COLS)) // 8
 
 function inChunks<T>(arr: T[]): T[][] {
   const result: T[][] = []
@@ -42,11 +42,14 @@ mealPlanRoutes.get('/', async (c) => {
   const withRecipes = await Promise.all(
     entries.map(async (entry) => {
       if (!entry.recipeId) return entry
-      const recipe = await db.query.recipes.findFirst({
-        where: eq(recipes.id, entry.recipeId),
-        columns: { id: true, title: true, pictureUrl: true, prepTime: true, cookTime: true },
-      })
-      return { ...entry, recipe: recipe ?? null }
+      const [recipe, nut] = await Promise.all([
+        db.query.recipes.findFirst({
+          where: eq(recipes.id, entry.recipeId),
+          columns: { id: true, title: true, pictureUrl: true, prepTime: true, cookTime: true },
+        }),
+        db.query.nutrition.findFirst({ where: eq(nutrition.recipeId, entry.recipeId), columns: { calories: true } }),
+      ])
+      return { ...entry, recipe: recipe ? { ...recipe, calories: nut?.calories ?? null } : null }
     })
   )
 
@@ -55,9 +58,10 @@ mealPlanRoutes.get('/', async (c) => {
 
 const mealPlanBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  mealLabel: z.enum(['breakfast', 'lunch', 'dinner']),
+  mealLabel: z.enum(['breakfast', 'lunch', 'dinner', 'snack']),
   recipeId: z.string().nullable().optional(),
   noteText: z.string().nullable().optional(),
+  calories: z.number().int().min(0).max(10000).nullable().optional(),
   dayNote: z.string().nullable().optional(),
   isRecurring: z.boolean().optional(),
   recurrenceRule: z.string().nullable().optional(),
@@ -74,10 +78,15 @@ mealPlanRoutes.post('/', async (c) => {
 
   const { date, mealLabel, recipeId, noteText, dayNote, isRecurring, recurrenceRule } = result.data
 
+  // Notes carry their own calorie figure: the user's, or an AI estimate when none was given.
+  const calories = recipeId ? null
+    : result.data.calories !== undefined ? result.data.calories
+    : noteText?.trim() ? await estimateNoteCalories(noteText, c.env.AI_GATEWAY_API_KEY) : null
+
   const entryId = crypto.randomUUID()
   const [entry] = await db.insert(mealPlan).values({
     id: entryId, familyId, date, mealLabel,
-    recipeId: recipeId ?? null, noteText: noteText ?? null, dayNote: dayNote ?? null,
+    recipeId: recipeId ?? null, noteText: noteText ?? null, calories, dayNote: dayNote ?? null,
     isRecurring: isRecurring ?? false, recurrenceRule: recurrenceRule ?? null,
     parentId: null, createdBy: userId,
   }).returning()
@@ -89,7 +98,7 @@ mealPlanRoutes.post('/', async (c) => {
       if (futureDates.length > 0) {
         const rows = futureDates.map((d) => ({
           familyId, date: d, mealLabel,
-          recipeId: recipeId ?? null, noteText: noteText ?? null,
+          recipeId: recipeId ?? null, noteText: noteText ?? null, calories,
           isRecurring: true, recurrenceRule, parentId: entryId, createdBy: userId,
         }))
         for (const chunk of inChunks(rows)) {
@@ -128,16 +137,24 @@ mealPlanRoutes.patch('/:id', async (c) => {
     return c.json({ error: { code: 'not_found', message: 'Entry not found' } }, 404)
   }
 
+  // Changing a note's text re-estimates its calories (unless the caller supplied a figure); a recipe has none of its own.
+  const update = { ...result.data }
+  const finalRecipeId = update.recipeId !== undefined ? update.recipeId : entry.recipeId
+  if (finalRecipeId) update.calories = null
+  else if (update.calories === undefined && update.noteText != null && update.noteText !== entry.noteText) {
+    update.calories = update.noteText.trim() ? await estimateNoteCalories(update.noteText, c.env.AI_GATEWAY_API_KEY) : null
+  }
+
   if (scope === 'series' && entry.parentId) {
     const allSeries = await db.query.mealPlan.findMany({
       where: and(eq(mealPlan.parentId, entry.parentId), gte(mealPlan.date, entry.date)),
     })
     await Promise.all([
-      db.update(mealPlan).set(result.data).where(eq(mealPlan.id, id)),
-      ...allSeries.map((e) => db.update(mealPlan).set(result.data).where(eq(mealPlan.id, e.id))),
+      db.update(mealPlan).set(update).where(eq(mealPlan.id, id)),
+      ...allSeries.map((e) => db.update(mealPlan).set(update).where(eq(mealPlan.id, e.id))),
     ])
   } else {
-    await db.update(mealPlan).set(result.data).where(eq(mealPlan.id, id))
+    await db.update(mealPlan).set(update).where(eq(mealPlan.id, id))
   }
 
   // Recalculate future recurring entries whenever the recurrence settings change.
@@ -161,6 +178,7 @@ mealPlanRoutes.patch('/:id', async (c) => {
           mealLabel: result.data.mealLabel ?? entry.mealLabel,
           recipeId: result.data.recipeId !== undefined ? result.data.recipeId : entry.recipeId,
           noteText: result.data.noteText !== undefined ? result.data.noteText : entry.noteText,
+          calories: finalRecipeId ? null : update.calories !== undefined ? update.calories : entry.calories,
           isRecurring: true as const,
           recurrenceRule: newRecurrenceRule,
           parentId: id,
@@ -201,7 +219,7 @@ mealPlanRoutes.delete('/:id', async (c) => {
 })
 
 const suggestBodySchema = z.object({
-  mealLabel: z.enum(['breakfast', 'lunch', 'dinner']),
+  mealLabel: z.enum(['breakfast', 'lunch', 'dinner', 'snack']),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
@@ -217,6 +235,7 @@ const MEAL_TYPES_FOR: Record<string, string[]> = {
   breakfast: ['breakfast'],
   lunch: ['lunch', 'dinner'],
   dinner: ['dinner', 'lunch'],
+  snack: ['snack', 'dessert'],
 }
 
 

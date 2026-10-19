@@ -92,7 +92,7 @@ export function meetsGoal(goal: Pick<StreakGoal, 'target' | 'comparator'>, value
 }
 
 export function goalSubtitle(g: Pick<StreakGoal, 'type' | 'target' | 'comparator'>): string {
-  if (g.type === 'calories') return 'Totalled from your meal plan'
+  if (g.type === 'calories') return 'Automatic from your meal plan'
   if (g.type === 'daily_dozen') return 'Automatic from your meal plan'
   return 'Tap the circle when done'
 }

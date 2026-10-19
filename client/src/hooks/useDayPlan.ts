@@ -7,9 +7,9 @@ import type { Recipe } from '../types'
 
 export interface DayPlan {
   categories: Set<DailyDozenId>
-  /** Sum of per-serving calories of planned recipes (one serving each). */
+  /** Sum of per-serving calories of planned recipes (one serving each) plus the calories on notes and snacks. */
   calories: number
-  /** Planned meals we couldn't put a calorie figure on (notes, or recipes without nutrition). */
+  /** Planned meals we couldn't put a calorie figure on (recipes without nutrition, or notes the AI couldn't estimate). */
   uncounted: number
   meals: number
 }
@@ -33,7 +33,7 @@ export function useDayPlans(start: string, end: string, enabled = true) {
     let calories = 0
     let uncounted = 0
     for (const e of dayEntries) {
-      const kcal = e.recipeId ? recipes[e.recipeId]?.nutrition?.calories : null
+      const kcal = e.recipeId ? (recipes[e.recipeId]?.nutrition?.calories ?? e.recipe?.calories) : e.calories
       if (kcal != null) calories += kcal
       else uncounted++
     }
