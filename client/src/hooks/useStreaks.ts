@@ -92,9 +92,8 @@ export function meetsGoal(goal: Pick<StreakGoal, 'target' | 'comparator'>, value
 }
 
 export function goalSubtitle(g: Pick<StreakGoal, 'type' | 'target' | 'comparator'>): string {
-  if (g.type === 'calories') return 'Automatic from your meal plan'
-  if (g.type === 'daily_dozen') return 'Automatic from your meal plan'
-  return 'Tap the circle when done'
+  if (g.type === 'calories' || g.type === 'daily_dozen') return 'From your meal plan'
+  return ''
 }
 
 export const goalIcon: Record<GoalType, string> = {
