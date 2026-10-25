@@ -59,7 +59,7 @@ function Hero({ data }: { data: StreaksData }) {
           ? 'Set a daily goal to start your first streak.'
           : live === 0
             ? 'Check in today to start a streak.'
-            : `${live} of ${data.goals.length} goal${data.goals.length > 1 ? 's' : ''} on a streak. Each one is tracked separately.`}
+            : `${live} of ${data.goals.length} goal${data.goals.length > 1 ? 's' : ''} on a streak.`}
       </p>
     </div>
   )
@@ -189,7 +189,7 @@ function GoalCheck({ goal, date, data, plan }: { goal: StreakGoal; date: string;
             <p className={`text-sm font-semibold ${ok ? 'text-primary' : 'text-on-surface-variant'}`}>
               {cats.size}/{DAILY_DOZEN.length} groups · goal {goal.target} {ok ? '✓' : ''}
             </p>
-            <p className="text-xs text-on-surface-variant">Automatic: counted from your meal plan, nothing to confirm. Add meals to the plan to change it.</p>
+            <p className="text-xs text-on-surface-variant">Counted from your meal plan.</p>
           </>
         )
       })()}
@@ -314,7 +314,7 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
             <input inputMode="numeric" type="number" value={kcal} onChange={(e) => setKcal(e.target.value)} className={fieldCls} />
             <span className="text-sm text-on-surface-variant whitespace-nowrap">kcal/day</span>
           </div>
-          <p className="text-xs text-on-surface-variant">Fully automatic: we total the calories on your meal plan (meals, notes and snacks). Nothing to tick or confirm.</p>
+          <p className="text-xs text-on-surface-variant">Totalled from your meal plan.</p>
         </div>
       )}
 
@@ -322,7 +322,7 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
         <div className="space-y-3">
           <p className="text-sm text-on-surface">Hit <span className="font-bold text-primary">{groups}</span> of the {DAILY_DOZEN.length} Daily Dozen food groups</p>
           <input type="range" min={1} max={DAILY_DOZEN.length} value={groups} onChange={(e) => setGroups(Number(e.target.value))} className="w-full accent-primary" />
-          <p className="text-xs text-on-surface-variant">Fully automatic: your meal plan decides which groups count each day. Nothing to tick or confirm.</p>
+          <p className="text-xs text-on-surface-variant">Counted from your meal plan.</p>
         </div>
       )}
 
@@ -407,7 +407,7 @@ export function StreaksPage() {
         {data.goals.length === 0 ? (
           <div className="bg-surface-container-lowest rounded-3xl p-6 shadow-card text-center space-y-3">
             <p className="font-headline font-bold text-on-surface">What do you want to do every day?</p>
-            <p className="text-sm text-on-surface-variant">Pick a calorie target, a Daily Dozen target or your own habit. Tick off what you've done as you go, and each goal builds its own streak.</p>
+            <p className="text-sm text-on-surface-variant">Pick a calorie target, a Daily Dozen target or your own habit.</p>
             <button onClick={() => setEditing('new')} className="px-6 py-2.5 rounded-full bg-primary text-on-primary font-headline font-bold text-sm">Set your first goal</button>
           </div>
         ) : (
