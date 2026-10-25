@@ -57,7 +57,8 @@ export const usePrefsStore = create<PrefsState>()(
         const p = (persisted ?? {}) as Partial<PrefsState>
         const order = (p.navOrder ?? []).filter((id) => id in FEATURE_BY_ID)
         const missing = DEFAULT_NAV_ORDER.filter((id) => !order.includes(id))
-        return { ...current, ...p, navOrder: [...order, ...missing] }
+        const hidden = (p.navHidden ?? []).filter((id) => id in FEATURE_BY_ID)
+        return { ...current, ...p, navOrder: [...order, ...missing], navHidden: hidden }
       },
     },
   ),

@@ -1244,9 +1244,8 @@ function SelectedDay({
     <>
       <div className="mb-4">
         <div>
-          {isToday && <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">Today</p>}
           <h2 className="font-headline font-bold text-lg text-on-surface">
-            {d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {isToday ? 'Today' : d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
           </h2>
         </div>
       </div>

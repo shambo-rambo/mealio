@@ -1,4 +1,4 @@
-export type FeatureId = 'streaks' | 'planner' | 'recipes' | 'shopping' | 'family'
+export type FeatureId = 'streaks' | 'planner' | 'recipes' | 'shopping'
 
 export interface FeatureDef {
   id: FeatureId
@@ -14,7 +14,6 @@ export const FEATURES: FeatureDef[] = [
   { id: 'planner', to: '/planner', icon: 'calendar_today', label: 'Meal Plan', description: 'Plan meals, snacks and sides for each day' },
   { id: 'recipes', to: '/recipes', icon: 'restaurant_menu', label: 'Recipes', description: 'Save, import and cook your recipes' },
   { id: 'shopping', to: '/shopping', icon: 'shopping_basket', label: 'Shopping', description: 'Shopping lists and stores' },
-  { id: 'family', to: '/family', icon: 'group', label: 'Family', description: 'Share with family members — switch off if you use Mealio solo' },
 ]
 
 export const FEATURE_BY_ID = Object.fromEntries(FEATURES.map((f) => [f.id, f])) as Record<FeatureId, FeatureDef>
