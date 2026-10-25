@@ -4,6 +4,8 @@ import { TopBar } from '../../components/layout/TopBar'
 import { toast } from '../../components/shared/Toast'
 import { useAuthStore } from '../../store/authStore'
 import { usePrefsStore } from '../../store/prefsStore'
+import { FEATURE_BY_ID } from '../../lib/features'
+import { ALLERGENS, ALLERGEN_LABELS } from '../../types'
 import { api, getErrorMessage } from '../../lib/api'
 import { GoogleButton } from '../../components/auth/GoogleButton'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
@@ -19,7 +21,7 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
   const { permission, subscribing, subscribe, unsubscribe } = usePushNotifications()
-  const { dailyDozenEnabled, setDailyDozenEnabled } = usePrefsStore()
+  const { navOrder, navHidden, setFeatureEnabled, moveFeature, resetNav, dailyDozenEnabled, setDailyDozenEnabled, avoidAllergens, toggleAvoidAllergen } = usePrefsStore()
 
   const hasPassword = user?.hasPassword !== false
 
@@ -55,9 +57,66 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-surface pb-28">
-      <TopBar title="Account settings" showBack onBack={() => navigate(-1)} />
+      <TopBar title="Settings" showBack onBack={() => navigate(-1)} />
 
       <div className="pt-topbar px-4 mt-2 space-y-6">
+
+        {/* App layout */}
+        <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card space-y-3">
+          <div>
+            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Your app</p>
+            <p className="text-xs text-on-surface-variant mt-1">
+              Choose what Mealio is for. Ticked features appear in the bottom bar in this order.
+            </p>
+          </div>
+          <ul className="divide-y divide-outline-variant/40">
+            {navOrder.map((id, i) => {
+              const f = FEATURE_BY_ID[id]
+              const on = !navHidden.includes(id)
+              const onlyOne = on && navOrder.length - navHidden.length === 1
+              return (
+                <li key={id} className="flex items-center gap-3 py-3">
+                  <button
+                    role="switch"
+                    aria-checked={on}
+                    aria-label={`Show ${f.label}`}
+                    disabled={onlyOne}
+                    onClick={() => setFeatureEnabled(id, !on)}
+                    className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
+                      on ? 'bg-primary' : 'bg-outline-variant'
+                    }`}
+                  >
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className={`material-symbols-outlined text-[22px] ${on ? 'text-primary' : 'text-on-surface-variant'}`}>{f.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${on ? 'text-on-surface' : 'text-on-surface-variant'}`}>{f.label}</p>
+                    <p className="text-xs text-on-surface-variant">{f.description}</p>
+                  </div>
+                  <div className="flex flex-col flex-shrink-0">
+                    <button
+                      aria-label={`Move ${f.label} up`}
+                      disabled={i === 0}
+                      onClick={() => moveFeature(id, -1)}
+                      className="material-symbols-outlined text-[20px] text-on-surface-variant disabled:opacity-20"
+                    >
+                      keyboard_arrow_up
+                    </button>
+                    <button
+                      aria-label={`Move ${f.label} down`}
+                      disabled={i === navOrder.length - 1}
+                      onClick={() => moveFeature(id, 1)}
+                      className="material-symbols-outlined text-[20px] text-on-surface-variant disabled:opacity-20"
+                    >
+                      keyboard_arrow_down
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          <button onClick={resetNav} className="text-xs font-bold text-primary">Reset to default</button>
+        </div>
 
         {/* Profile */}
         <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-card space-y-4">
@@ -208,6 +267,30 @@ export function SettingsPage() {
                 }`}
               />
             </button>
+          </div>
+        </div>
+
+        {/* Allergens to avoid */}
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card p-5 space-y-3">
+          <div>
+            <p className="font-headline font-bold text-on-surface">Allergens to avoid</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              Recipes containing these get a warning. Detected automatically from the ingredients — always check labels.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {ALLERGENS.map((a) => (
+              <button
+                key={a}
+                onClick={() => toggleAvoidAllergen(a)}
+                aria-pressed={avoidAllergens.includes(a)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                  avoidAllergens.includes(a) ? 'bg-error text-on-error' : 'bg-surface-container text-on-surface-variant'
+                }`}
+              >
+                {ALLERGEN_LABELS[a]}
+              </button>
+            ))}
           </div>
         </div>
 

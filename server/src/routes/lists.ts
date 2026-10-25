@@ -3,10 +3,10 @@ import { eq, and, asc, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { shoppingLists, shoppingItems, itemHistory, itemLines } from '../db/schema.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { upsertItemHistory, normalizeItemName, getItemSuggestions, getDefaultStoreForItem, getDefaultCategoryForItem, getStoreForCategory } from '../lib/itemHistory.js'
+import { upsertItemHistory, normalizeItemName, getItemSuggestions, getDefaultStoreForItem, getDefaultCategoryForItem, getDefaultAisleForItem, getStoreForCategory } from '../lib/itemHistory.js'
 import { broadcastToFamily } from '../lib/ws.js'
 import { pushToFamily } from '../lib/push.js'
-import { suggestItemCategory } from '../lib/ai.js'
+import { classifyNewItem } from '../lib/classify.js'
 import { parseAmount, normalizeUnit } from '../lib/amounts.js'
 import type { AppEnv } from '../types.js'
 import type { AppDB } from '../db/index.js'
@@ -275,18 +275,20 @@ listsRoutes.post('/:id/items', async (c) => {
   }
 
   let defaultStoreId = rest.storeId ?? await getDefaultStoreForItem(db, familyId!, name)
-  // Use previously-learned category so repeat items are categorised immediately
+  // Use previously-learned category/aisle so repeat items are filed immediately
   let defaultCategory = rest.category ?? await getDefaultCategoryForItem(db, familyId!, name)
+  let defaultAisle = await getDefaultAisleForItem(db, familyId!, name)
 
-  // Unknown category: ask the AI up front (short timeout) so the item appears already filed
-  if (!defaultCategory) {
+  // Unknown category or aisle: ask Jev up front (short timeout) so the item appears already filed
+  if (!defaultCategory || !defaultAisle) {
     try {
-      defaultCategory = await Promise.race([
-        suggestItemCategory(name, c.env.TYPESAFE_API_KEY),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
-      ])
+      const cls = await classifyNewItem(name, c.env.TYPESAFE_API_KEY)
+      if (cls) {
+        defaultCategory = defaultCategory ?? cls.category
+        defaultAisle = defaultAisle ?? cls.aisle
+      }
     } catch (err) {
-      console.error('category suggestion failed', err)
+      console.error('item classification failed', err)
     }
   }
   // Shop follows the category: most-used shop among other items in it
@@ -296,7 +298,7 @@ listsRoutes.post('/:id/items', async (c) => {
 
   const [item] = await db.insert(shoppingItems).values({
     ...rest,
-    listId, name: name.trim(), quantity: quantity ?? null, storeId: defaultStoreId, category: defaultCategory, createdBy: userId,
+    listId, name: name.trim(), quantity: quantity ?? null, storeId: defaultStoreId, category: defaultCategory, aisle: defaultAisle, createdBy: userId,
   }).returning()
 
   if (amount) {
@@ -307,7 +309,7 @@ listsRoutes.post('/:id/items', async (c) => {
 
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:added', listId, itemId: item.id })
 
-  if (defaultCategory) await upsertItemHistory(db, familyId!, name, defaultCategory, defaultStoreId)
+  if (defaultCategory) await upsertItemHistory(db, familyId!, name, defaultCategory, defaultStoreId, defaultAisle)
 
   return c.json({ item: await withLines(db, item) }, 201)
 })

@@ -17,7 +17,7 @@ export function AuthShell({
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <BrandMark />
-          <h1 className="font-headline text-2xl text-on-surface">{title}</h1>
+          <h1 className="font-headline font-bold text-2xl text-on-surface">{title}</h1>
           {subtitle && <p className="text-on-surface-variant text-sm mt-1">{subtitle}</p>}
         </div>
         {children}

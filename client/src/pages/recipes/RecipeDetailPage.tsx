@@ -7,6 +7,7 @@ import { toast } from '../../components/shared/Toast'
 import { AddToListSheet } from '../../components/shared/AddToListSheet'
 import { useRecipeQuery, useRateRecipeMutation, useDeleteRecipeMutation, scaleIngredients } from '../../hooks/useRecipes'
 import { DIETARY_TAG_LABELS, type DietaryTag } from '../../types'
+import { AllergenWarning } from '../../components/shared/AllergenWarning'
 import { api } from '../../lib/api'
 
 function StarRating({ current, onRate }: { current: number | null; onRate: (r: number) => void }) {
@@ -182,6 +183,8 @@ export function RecipeDetailPage() {
                 </span>
               ))}
             </div>
+
+            <AllergenWarning allergens={recipe.allergens} />
 
             {/* Rating */}
             <div className="flex items-center gap-2 mt-3">

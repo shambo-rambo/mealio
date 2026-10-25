@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
+import { useNavFeatures } from '../../store/prefsStore'
 
 function Avatar({ size, className = '' }: { size: number; className?: string }) {
   const user = useAuthStore((s) => s.user)
@@ -29,6 +30,7 @@ export function AccountMenu() {
   const user = useAuthStore((s) => s.user)
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const [open, setOpen] = useState(false)
+  const features = useNavFeatures().map((f) => f.id)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -88,17 +90,27 @@ export function AccountMenu() {
             </div>
           </div>
 
-          <button role="menuitem" onClick={() => go('/family')} className={item}>
-            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">group</span>
-            Family members &amp; invites
-          </button>
-          <button role="menuitem" onClick={() => go('/stores')} className={item}>
-            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">store</span>
-            Manage stores
-          </button>
+          {features.includes('streaks') && (
+            <button role="menuitem" onClick={() => go('/streaks?goals=1')} className={item}>
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant">local_fire_department</span>
+              Daily goals
+            </button>
+          )}
+          {features.includes('family') && (
+            <button role="menuitem" onClick={() => go('/family')} className={item}>
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant">group</span>
+              Family members &amp; invites
+            </button>
+          )}
+          {features.includes('shopping') && (
+            <button role="menuitem" onClick={() => go('/stores')} className={item}>
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant">store</span>
+              Manage stores
+            </button>
+          )}
           <button role="menuitem" onClick={() => go('/settings')} className={item}>
-            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">settings</span>
-            Account settings
+            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">tune</span>
+            Settings &amp; app layout
           </button>
           <button role="menuitem" onClick={signOut} className={`${item} border-t border-outline-variant/40 !text-error`}>
             <span className="material-symbols-outlined text-[20px] text-error">logout</span>

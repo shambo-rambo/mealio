@@ -11,6 +11,7 @@ import { collectionsRoutes } from './routes/collections.js'
 import { mealPlanRoutes } from './routes/mealPlan.js'
 import { uploadRoutes } from './routes/upload.js'
 import { pushRoutes } from './routes/push.js'
+import { streaksRoutes } from './routes/streaks.js'
 import { verifyToken } from './lib/jwt.js'
 import type { AppEnv } from './types.js'
 
@@ -106,6 +107,7 @@ app.route('/api/v1/collections', collectionsRoutes)
 app.route('/api/v1/meal-plan', mealPlanRoutes)
 app.route('/api/v1/upload', uploadRoutes)
 app.route('/api/v1/push', pushRoutes)
+app.route('/api/v1/streaks', streaksRoutes)
 app.route('/api/v1/public/invites', publicInviteRoutes)
 app.route('/api/v1/public/lists', publicListsRoutes)
 app.route('/api/v1/public/recipes', publicRecipesRoutes)

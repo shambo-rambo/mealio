@@ -6,8 +6,20 @@ import { RecipeCardSkeleton } from '../../components/shared/Skeleton'
 import { useRecipesQuery, useCollectionsQuery } from '../../hooks/useRecipes'
 import type { DietaryTag } from '../../types'
 import { DIETARY_TAG_LABELS } from '../../types'
+import { AllergenWarning } from '../../components/shared/AllergenWarning'
 
 const DIET_TAGS: DietaryTag[] = ['vegetarian', 'vegan', 'gluten_free', 'dairy_free', 'nut_free']
+
+// Jev-assigned tags; each group is a single-select row of chips.
+type TagKey = 'mealType' | 'effort' | 'protein' | 'cuisine' | 'maxTime' | 'kid'
+const TAG_GROUPS: Array<{ key: TagKey; options: Array<[string, string]> }> = [
+  { key: 'mealType', options: [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner', 'Dinner'], ['snack', 'Snack'], ['dessert', 'Dessert'], ['side', 'Side']] },
+  { key: 'maxTime', options: [['30', 'Under 30 min'], ['45', 'Under 45 min'], ['60', 'Under 1 hr']] },
+  { key: 'effort', options: [['quick', 'Quick'], ['medium', 'Medium'], ['project', 'Project']] },
+  { key: 'protein', options: [['chicken', 'Chicken'], ['beef', 'Beef'], ['pork', 'Pork'], ['lamb', 'Lamb'], ['fish', 'Fish'], ['seafood', 'Seafood'], ['eggs', 'Eggs'], ['plant', 'Plant-based']] },
+  { key: 'cuisine', options: [['italian', 'Italian'], ['asian', 'Asian'], ['mexican', 'Mexican'], ['indian', 'Indian'], ['mediterranean', 'Mediterranean'], ['middle_eastern', 'Middle Eastern'], ['british_irish', 'British & Irish'], ['american', 'American'], ['french', 'French']] },
+  { key: 'kid', options: [['1', 'Kid-friendly']] },
+]
 
 function StarDisplay({ rating }: { rating: number | null }) {
   if (!rating) return null
@@ -44,14 +56,23 @@ export function RecipesPage() {
   const [activeTag, setActiveTag] = useState<DietaryTag | null>(null)
   const [activeCollection, setActiveCollection] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [tagFilters, setTagFilters] = useState<Partial<Record<TagKey, string>>>({})
 
   const { data: recipes, isLoading } = useRecipesQuery({
     search: search || undefined,
     tag: activeTag ?? undefined,
     collection: activeCollection ?? undefined,
+    ...tagFilters,
   })
   const { data: collections = [] } = useCollectionsQuery()
-  const activeFilterCount = (activeTag ? 1 : 0) + (activeCollection ? 1 : 0)
+  const activeFilterCount = (activeTag ? 1 : 0) + (activeCollection ? 1 : 0) + Object.keys(tagFilters).length
+  const toggleTagFilter = (key: TagKey, value: string) =>
+    setTagFilters((f) => {
+      const next = { ...f }
+      if (next[key] === value) delete next[key]
+      else next[key] = value
+      return next
+    })
 
   return (
     <div className="min-h-screen bg-surface pb-28">
@@ -127,6 +148,21 @@ export function RecipesPage() {
             ))}
           </div>
         )}
+        {showFilters && TAG_GROUPS.map((g) => (
+          <div key={g.key} className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {g.options.map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => toggleTagFilter(g.key, value)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  tagFilters[g.key] === value ? 'bg-tertiary text-on-tertiary' : 'bg-surface-container text-on-surface-variant'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ))}
       </div>
 
       <main className="px-6 mt-4">
@@ -137,14 +173,14 @@ export function RecipesPage() {
         ) : !recipes?.length ? (
           <EmptyState
             icon="restaurant_menu"
-            title={search || activeTag || activeCollection ? 'No recipes found' : 'No recipes yet'}
+            title={search || activeTag || activeCollection || activeFilterCount > 0 ? 'No recipes found' : 'No recipes yet'}
             description={
-              search || activeTag
+              search || activeFilterCount > 0
                 ? 'Try a different search or filter.'
                 : 'Import your first recipe from a URL, photo, or text.'
             }
             action={
-              !search && !activeTag
+              !search && activeFilterCount === 0
                 ? { label: 'Import recipe', onClick: () => navigate('/recipes/import') }
                 : undefined
             }
@@ -182,6 +218,7 @@ export function RecipesPage() {
                   <div className="mt-1.5">
                     <StarDisplay rating={recipe.averageRating ?? null} />
                   </div>
+                  <AllergenWarning allergens={recipe.allergens} compact />
                 </div>
               </button>
             ))}

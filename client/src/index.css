@@ -20,6 +20,28 @@
   * {
     box-sizing: border-box;
   }
+
+  /* Typography: tracking is size-specific — tight on large text, open on small */
+  h1, h2, h3 {
+    letter-spacing: -0.012em;
+    word-spacing: 0.03em;
+    line-height: 1.2;
+    font-optical-sizing: auto;
+  }
+
+  /* Response: feedback on press-down, not release. Instant in, eased out. */
+  button:not(:disabled),
+  [role='button'],
+  a {
+    touch-action: manipulation;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease-out,
+      background-color 150ms ease-out, color 150ms ease-out;
+  }
+  button:not(:disabled):active,
+  [role='button']:active {
+    transform: scale(0.97);
+    transition-duration: 70ms;
+  }
 }
 
 @layer utilities {
@@ -65,17 +87,35 @@
   }
 }
 
-/* Bottom sheet backdrop */
+/* Bottom sheet backdrop — dim to focus */
 .sheet-backdrop {
   background: rgba(24, 29, 24, 0.4);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: fade-in 260ms ease-out both;
 }
 
-/* Frosted glass — warm off-white tint for content overlays */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Sheet arrives from its own edge with a soft, critically damped settle */
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: sheet-in 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* Frosted glass — translucent layer with content scrolling beneath.
+   No hard divider: a faint hairline of light + soft shadow instead. */
 .glass {
-  background: rgba(247, 251, 243, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(247, 251, 243, 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 1px 0 rgba(24, 29, 24, 0.05), 0 8px 24px -12px rgba(24, 29, 24, 0.12);
 }
 
 /* Dark glass — ink tint for nav */
@@ -83,4 +123,35 @@
   background: rgba(224, 228, 220, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+/* Accessibility: reduced motion = gentle cross-fade, not slides/springs */
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  [role='button']:active {
+    transform: none;
+  }
+  .animate-slide-up {
+    animation: fade-in 200ms ease-out both;
+  }
+}
+
+/* Accessibility: reduced transparency = solid surfaces */
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: #f7fbf3;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .sheet-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .glass {
+    background: #f7fbf3;
+    border-bottom: 1px solid #707a6f;
+  }
 }

@@ -15,7 +15,7 @@ import {
 import { useMealPlanQuery, getWeekDates } from '../../hooks/usePlanner'
 import { queryKeys } from '../../lib/queryKeys'
 import type { ShoppingItem, Store, ItemHistorySuggestion, Recipe } from '../../types'
-import { CATEGORIES } from '../../types'
+import { CATEGORIES, aisleRank } from '../../types'
 import { api } from '../../lib/api'
 import { normalizeItemName, ingredientStatuses, STATUS_LABEL } from '../../lib/itemMatch'
 import { describeNeed, normalizeUnit, summariseLines } from '../../lib/amounts'
@@ -27,8 +27,10 @@ function itemAmount(item: ShoppingItem): string {
   return item.lines?.length ? summariseLines(item.lines) : (item.packageSize ?? '')
 }
 
+/** Shop walk order: by aisle, then category, then name. */
 function sortByCategory(items: ShoppingItem[]): ShoppingItem[] {
   return [...items].sort((a, b) =>
+    aisleRank(a) - aisleRank(b) ||
     (a.category ?? 'Other').localeCompare(b.category ?? 'Other') ||
     a.name.localeCompare(b.name)
   )

@@ -15,7 +15,8 @@ import { queryKeys } from '../../lib/queryKeys'
 import { api } from '../../lib/api'
 import { DAILY_DOZEN, classifyDay, type DailyDozenId } from '../../lib/dailyDozen'
 import { usePrefsStore } from '../../store/prefsStore'
-import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult } from '../../types'
+import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult, LibrarySuggestion } from '../../types'
+import { AllergenWarning } from '../../components/shared/AllergenWarning'
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ function DayStrip({
         const hasB = entries.some((e) => e.mealLabel === 'breakfast')
         const hasL = entries.some((e) => e.mealLabel === 'lunch')
         const hasD = entries.some((e) => e.mealLabel === 'dinner')
+        const hasS = entries.some((e) => e.mealLabel === 'snack')
 
         return (
           <button
@@ -90,6 +92,7 @@ function DayStrip({
               {hasB && <span className="w-1 h-1 rounded-full bg-amber-400" />}
               {hasL && <span className="w-1 h-1 rounded-full bg-sky-400" />}
               {hasD && <span className="w-1 h-1 rounded-full bg-violet-500" />}
+              {hasS && <span className="w-1 h-1 rounded-full bg-emerald-500" />}
             </div>
           </button>
         )
@@ -100,16 +103,25 @@ function DayStrip({
 
 // ── Meal slot components ───────────────────────────────────────────────────────
 
+const MEAL_LABELS: MealLabel[] = ['breakfast', 'lunch', 'dinner', 'snack']
+
 const MEAL_SLOT_META: Record<MealLabel, { emoji: string; label: string }> = {
   breakfast: { emoji: '🌅', label: 'Breakfast' },
   lunch:     { emoji: '🥗', label: 'Lunch' },
   dinner:    { emoji: '🍽️', label: 'Dinner' },
+  snack:     { emoji: '🍎', label: 'Snack' },
 }
 
 const LABEL_TEXT_COLORS: Record<MealLabel, string> = {
   breakfast: 'text-amber-600',
   lunch:     'text-sky-600',
   dinner:    'text-violet-600',
+  snack:     'text-emerald-600',
+}
+
+/** kcal for one planned entry: the recipe's per-serving figure, or the note's own. */
+function entryKcal(e: MealPlanEntry): number | null {
+  return e.recipeId ? e.recipe?.calories ?? null : e.calories
 }
 
 function AddSlotPill({ label, onClick }: { label: MealLabel; onClick: () => void }) {
@@ -126,10 +138,11 @@ function AddSlotPill({ label, onClick }: { label: MealLabel; onClick: () => void
 }
 
 function MealEntryCard({ entry, onEdit }: { entry: MealPlanEntry; onEdit: () => void }) {
+  const side = !!entry.sideOf
   return (
     <button
       onClick={onEdit}
-      className="w-full text-left flex items-center gap-4 p-3.5 bg-surface-container-lowest rounded-2xl shadow-card active:scale-[0.98] transition-transform"
+      className={`w-full text-left flex items-center gap-4 bg-surface-container-lowest rounded-2xl shadow-card active:scale-[0.98] transition-transform ${side ? 'p-2.5' : 'p-3.5'}`}
     >
       {entry.recipe?.pictureUrl ? (
         <img src={entry.recipe.pictureUrl} alt="" className="w-[56px] h-[50px] rounded-xl object-cover flex-shrink-0" />
@@ -140,12 +153,15 @@ function MealEntryCard({ entry, onEdit }: { entry: MealPlanEntry; onEdit: () => 
       )}
       <div className="flex-1 min-w-0">
         <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 flex items-center gap-1 ${LABEL_TEXT_COLORS[entry.mealLabel]}`}>
-          {entry.mealLabel}
+          {side ? 'Side' : entry.mealLabel}
           {entry.isRecurring && <span className="material-symbols-outlined text-[12px]" aria-label="Recurring">repeat</span>}
         </p>
         <p className="font-headline font-semibold text-on-surface text-sm truncate">
           {entry.recipe?.title ?? entry.noteText ?? '–'}
         </p>
+        {entryKcal(entry) != null && (
+          <p className="text-xs text-on-surface-variant mt-0.5">{!entry.recipeId && '~'}{Math.round(entryKcal(entry)!)} kcal</p>
+        )}
       </div>
     </button>
   )
@@ -158,16 +174,23 @@ function MealEntryCard({ entry, onEdit }: { entry: MealPlanEntry; onEdit: () => 
 function DayAgenda({
   entries,
   onAdd,
+  onAddSide,
   onEdit,
 }: {
   entries: MealPlanEntry[]
   onAdd: (label?: MealLabel) => void
+  onAddSide: (meal: MealPlanEntry) => void
   onEdit: (entry: MealPlanEntry) => void
 }) {
-  const mealSlots: MealLabel[] = ['breakfast', 'lunch', 'dinner']
-  const order = (e: MealPlanEntry) => mealSlots.indexOf(e.mealLabel)
-  const sorted = [...entries].sort((a, b) => order(a) - order(b))
-  const emptySlots = mealSlots.filter((slot) => !entries.some((e) => e.mealLabel === slot))
+  const order = (e: MealPlanEntry) => MEAL_LABELS.indexOf(e.mealLabel)
+  // Sides are drawn under the meal they belong to, so only mains are listed here.
+  const sorted = entries.filter((e) => !e.sideOf).sort((a, b) => order(a) - order(b))
+  const sidesOf = (meal: MealPlanEntry) => entries.filter((e) => e.sideOf === meal.id)
+  // Once breakfast, lunch and dinner are planned, "Add another" covers extra snacks (pick Snack in the sheet).
+  const emptyMeals = MEAL_LABELS.filter((slot) => slot !== 'snack' && !entries.some((e) => e.mealLabel === slot))
+  const kcalEntries = entries.map(entryKcal)
+  const totalKcal = kcalEntries.reduce<number>((sum, k) => sum + (k ?? 0), 0)
+  const unknown = kcalEntries.filter((k) => k == null).length
 
   return (
     <div className="space-y-4">
@@ -177,12 +200,32 @@ function DayAgenda({
       {sorted.length > 0 && (
         <div className="space-y-3">
           {sorted.map((entry) => (
-            <MealEntryCard key={entry.id} entry={entry} onEdit={() => onEdit(entry)} />
+            <div key={entry.id} className="space-y-2">
+              <MealEntryCard entry={entry} onEdit={() => onEdit(entry)} />
+              {sidesOf(entry).map((side) => (
+                <div key={side.id} className="ml-6">
+                  <MealEntryCard entry={side} onEdit={() => onEdit(side)} />
+                </div>
+              ))}
+              <button onClick={() => onAddSide(entry)} className="ml-6 flex items-center gap-1 text-xs font-bold text-primary">
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                Add a side
+              </button>
+            </div>
           ))}
         </div>
       )}
-      {emptySlots.length === 0 && (
-        <div className="flex">
+      {totalKcal > 0 && (
+        <p className="text-xs font-semibold text-on-surface-variant">
+          {Math.round(totalKcal)} kcal planned{unknown > 0 && ` · ${unknown} meal${unknown > 1 ? 's' : ''} not counted`}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {emptyMeals.map((slot) => (
+          <AddSlotPill key={slot} label={slot} onClick={() => onAdd(slot)} />
+        ))}
+        {emptyMeals.length > 0 && <AddSlotPill label="snack" onClick={() => onAdd('snack')} />}
+        {emptyMeals.length === 0 && (
           <button
             onClick={() => onAdd()}
             className="flex items-center gap-1.5 pl-2.5 pr-3.5 py-2 rounded-full border border-dashed border-outline-variant text-on-surface-variant text-sm font-semibold"
@@ -190,15 +233,8 @@ function DayAgenda({
             <span className="material-symbols-outlined text-[16px]">add</span>
             Add another
           </button>
-        </div>
-      )}
-      {emptySlots.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {emptySlots.map((slot) => (
-            <AddSlotPill key={slot} label={slot} onClick={() => onAdd(slot)} />
-          ))}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -319,10 +355,14 @@ function getOpener() {
 type DisplayMsg =
   | { kind: 'text'; role: 'user' | 'assistant'; content: string }
   | { kind: 'recipe'; importResult: RecipeImportResult }
+  | { kind: 'library'; recipes: LibrarySuggestion[] }
 
 function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealLabel: MealLabel; onClose: () => void }) {
   const navigate = useNavigate()
   const suggest = useSuggestMealMutation()
+  const addMeal = useAddMealMutation()
+  const { data: allRecipes = [] } = useRecipesQuery()
+  const [shownIds, setShownIds] = useState<string[]>([])
 
   // displayMsgs drives the UI; apiMsgs is what goes to the server (text-only)
   const opener = getOpener()
@@ -341,6 +381,14 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
       const msg: SuggestMessage = { role: 'assistant', content: data.text }
       setDisplayMsgs((prev) => [...prev, { kind: 'text', ...msg }])
       setApiMsgs((prev) => [...prev, msg])
+    } else if (data.type === 'library') {
+      // Matches from the family's own recipes — offered before writing anything new
+      setDisplayMsgs((prev) => [...prev, { kind: 'library', recipes: data.recipes }])
+      setApiMsgs((prev) => [
+        ...prev,
+        { role: 'assistant', content: `From your saved recipes I'd suggest: ${data.recipes.map((r) => r.title).join(', ')}. Do any of these work?` },
+      ])
+      setShownIds((prev) => [...prev, ...data.recipes.map((r) => r.id)])
     } else {
       const { importResult } = data
       // Add a rich recipe card to the display, and a text summary to the API context
@@ -368,7 +416,7 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
     const nextApi = [...apiMsgs, userMsg]
     setApiMsgs(nextApi)
     setInput('')
-    suggest.mutate({ mealLabel, messages: nextApi }, { onSuccess: handleResponse })
+    suggest.mutate({ mealLabel, messages: nextApi, shownRecipeIds: shownIds }, { onSuccess: handleResponse })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -376,6 +424,26 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  const addLibraryRecipe = async (recipeId: string) => {
+    if (!date) return
+    try {
+      await addMeal.mutateAsync({ date, mealLabel, recipeId })
+      toast.success('Added to plan')
+      onClose()
+    } catch {
+      toast.error('Could not add to plan')
+    }
+  }
+
+  const wantSomethingNew = () => {
+    if (suggest.isPending) return
+    const userMsg: SuggestMessage = { role: 'user', content: 'None of those — write me something new.' }
+    setDisplayMsgs((prev) => [...prev, { kind: 'text', ...userMsg }])
+    const nextApi = [...apiMsgs, userMsg]
+    setApiMsgs(nextApi)
+    suggest.mutate({ mealLabel, messages: nextApi, shownRecipeIds: shownIds, forceGenerate: true }, { onSuccess: handleResponse })
   }
 
   const handleAddRecipe = () => {
@@ -391,7 +459,43 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
       {/* Chat log */}
       <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar pt-1">
         {displayMsgs.map((msg, i) =>
-          msg.kind === 'recipe' ? (
+          msg.kind === 'library' ? (
+            // ── Saved-recipe matches ────────────────────────────────────────
+            <div key={i} className="space-y-2 max-w-[92%]">
+              {msg.recipes.map((r) => {
+                const full = allRecipes.find((x) => x.id === r.id)
+                const mins = (r.prepTime ?? 0) + (r.cookTime ?? 0)
+                return (
+                  <div key={r.id} className="bg-surface-container-low border border-outline-variant rounded-2xl p-3 flex items-center gap-3">
+                    {r.pictureUrl ? (
+                      <img src={r.pictureUrl} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-on-surface-variant/50">restaurant_menu</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-headline font-bold text-on-surface text-sm leading-snug truncate">{r.title}</p>
+                      <p className="text-xs text-on-surface-variant">
+                        {[mins > 0 && `${mins} min`, r.effort, r.protein && r.protein !== 'none' ? r.protein : null].filter(Boolean).join(' · ')}
+                      </p>
+                      <AllergenWarning allergens={full?.allergens} compact />
+                    </div>
+                    <button
+                      onClick={() => addLibraryRecipe(r.id)}
+                      disabled={addMeal.isPending}
+                      className="px-3 py-1.5 rounded-full bg-primary text-on-primary text-xs font-bold flex-shrink-0 disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )
+              })}
+              <button onClick={wantSomethingNew} className="text-xs font-bold text-primary px-1 py-1">
+                None of these — write me something new
+              </button>
+            </div>
+          ) : msg.kind === 'recipe' ? (
             // ── Recipe card bubble ──────────────────────────────────────────
             <div key={i} className="flex justify-start">
               <div className="bg-surface-container-low border border-outline-variant rounded-2xl rounded-bl-sm p-4 space-y-2 max-w-[90%]">
@@ -481,12 +585,13 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
 
 // ── Add meal sheet ────────────────────────────────────────────────────────────
 
-function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; defaultLabel?: MealLabel; onClose: () => void }) {
+function AddMealSheet({ date, defaultLabel, sideOf, onClose }: { date: string | null; defaultLabel?: MealLabel; sideOf?: MealPlanEntry | null; onClose: () => void }) {
   const addMeal = useAddMealMutation()
   const { data: recipes = [] } = useRecipesQuery()
-  const [label, setLabel] = useState<MealLabel>(defaultLabel ?? 'dinner')
+  const [label, setLabel] = useState<MealLabel>(sideOf?.mealLabel ?? defaultLabel ?? 'dinner')
   const [recipeSearch, setRecipeSearch] = useState('')
   const [noteText, setNoteText] = useState('')
+  const [noteKcal, setNoteKcal] = useState('')
   const [mode, setMode] = useState<'recipe' | 'note' | 'suggest'>('recipe')
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
   const [showRepeat, setShowRepeat] = useState(false)
@@ -515,8 +620,10 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
         mealLabel: label,
         recipeId: recipeId ?? null,
         noteText: mode === 'note' ? noteText : null,
-        isRecurring: !!recurrenceRule,
-        recurrenceRule: recurrenceRule ? JSON.stringify(recurrenceRule) : null,
+        sideOf: sideOf?.id ?? null,
+        calories: mode === 'note' && noteKcal !== '' ? Math.round(Number(noteKcal)) : undefined,
+        isRecurring: !sideOf && !!recurrenceRule,
+        recurrenceRule: !sideOf && recurrenceRule ? JSON.stringify(recurrenceRule) : null,
       })
       toast.success('Added to plan')
       onClose()
@@ -536,12 +643,12 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
   }
 
   return (
-    <BottomSheet open={!!date} onClose={onClose} title={`Add ${label}`} size="lg">
+    <BottomSheet open={!!date} onClose={onClose} title={sideOf ? `Add a side to ${sideOf.recipe?.title ?? sideOf.noteText ?? sideOf.mealLabel}` : `Add ${label}`} size="lg">
       <div className="space-y-4 pb-4">
 
         {/* Mode toggle — at top so content below stays consistent */}
         <div className="flex gap-2 bg-surface-container-low p-1 rounded-full">
-          {(['recipe', 'note', 'suggest'] as const).map((m) => (
+          {(sideOf ? ['recipe', 'note'] as const : ['recipe', 'note', 'suggest'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -554,9 +661,9 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
           ))}
         </div>
 
-        {/* Meal label — compact single row */}
-        <div className="flex gap-2" role="radiogroup" aria-label="Meal">
-          {(['breakfast', 'lunch', 'dinner'] as MealLabel[]).map((l) => (
+        {/* Meal label — compact single row (a side stays in its meal's slot) */}
+        {!sideOf && <div className="flex gap-2" role="radiogroup" aria-label="Meal">
+          {MEAL_LABELS.map((l) => (
             <button
               key={l}
               role="radio"
@@ -569,7 +676,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
               {l.charAt(0).toUpperCase() + l.slice(1)}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Content */}
         {mode === 'suggest' ? (
@@ -614,7 +721,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
             {/* Action bar — appears after recipe is selected */}
             {selectedRecipe && (
               <div className="space-y-3 pt-1">
-<RepeatPicker
+{!sideOf && <RepeatPicker
                   on={showRepeat}
                   label={repeatLabel}
                   repeat={repeat}
@@ -624,7 +731,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
                   onRepeat={(r) => { setRepeat(r); setShowAdvanced(false) }}
                   onAdvanced={() => setShowAdvanced(!showAdvanced)}
                   onRule={setAdvancedRule}
-                />
+                />}
                 <button
                   onClick={() => handleAdd(selectedRecipe.id)}
                   disabled={addMeal.isPending}
@@ -644,9 +751,20 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
               rows={3}
               className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary resize-none"
             />
+            <div className="flex items-center gap-2">
+              <input
+                type="number" inputMode="numeric" min={0} max={10000}
+                value={noteKcal}
+                onChange={(e) => setNoteKcal(e.target.value)}
+                placeholder="Calories (optional)"
+                className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-sm"
+              />
+              <span className="text-sm text-on-surface-variant whitespace-nowrap">kcal</span>
+            </div>
+            <p className="text-xs text-on-surface-variant -mt-2">Leave blank and AI will estimate it.</p>
             {noteText.trim() && (
               <div className="space-y-3">
-<RepeatPicker
+{!sideOf && <RepeatPicker
                   on={showRepeat}
                   label={repeatLabel}
                   repeat={repeat}
@@ -656,7 +774,7 @@ function AddMealSheet({ date, defaultLabel, onClose }: { date: string | null; de
                   onRepeat={(r) => { setRepeat(r); setShowAdvanced(false) }}
                   onAdvanced={() => setShowAdvanced(!showAdvanced)}
                   onRule={setAdvancedRule}
-                />
+                />}
               </div>
             )}
             <button
@@ -684,11 +802,15 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
   const [advancedRule, setAdvancedRule] = useState<RecurrenceRule>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [lastId, setLastId] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [kcal, setKcal] = useState('')
 
   // Sync state when a different entry is opened
   if (entry && entry.id !== lastId) {
     setLastId(entry.id)
     setLabel(entry.mealLabel)
+    setNoteText(entry.noteText ?? '')
+    setKcal(entry.calories != null ? String(entry.calories) : '')
     setConfirmDelete(false)
     if (entry.recurrenceRule) {
       try {
@@ -711,14 +833,23 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
     : repeat === 'weekly' ? { freq: 'weekly' }
     : null
 
+  const isNote = !!entry && !entry.recipeId
   const handleSave = async () => {
     if (!entry) return
+    // Edited text with an untouched calorie figure is re-estimated by the server; an edited figure is kept as typed.
+    const noteChanges = isNote
+      ? {
+          ...(noteText.trim() && noteText !== (entry.noteText ?? '') ? { noteText: noteText.trim() } : {}),
+          ...(kcal !== (entry.calories != null ? String(entry.calories) : '') ? { calories: kcal === '' ? null : Math.round(Number(kcal)) } : {}),
+        }
+      : {}
     try {
       await updateMeal.mutateAsync({
         id: entry.id,
         mealLabel: label,
-        isRecurring: !!recurrenceRule,
-        recurrenceRule: recurrenceRule ? JSON.stringify(recurrenceRule) : null,
+        ...noteChanges,
+        isRecurring: !entry.sideOf && !!recurrenceRule,
+        recurrenceRule: !entry.sideOf && recurrenceRule ? JSON.stringify(recurrenceRule) : null,
       })
       toast.success('Meal updated')
       onClose()
@@ -751,6 +882,30 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
           </div>
         )}
 
+        {isNote && (
+          <div className="space-y-2">
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              rows={2}
+              aria-label="Note"
+              className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary resize-none text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number" inputMode="numeric" min={0} max={10000}
+                value={kcal}
+                onChange={(e) => setKcal(e.target.value)}
+                placeholder="Calories"
+                aria-label="Calories"
+                className="flex-1 px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary text-sm"
+              />
+              <span className="text-sm text-on-surface-variant whitespace-nowrap">kcal</span>
+            </div>
+            <p className="text-xs text-on-surface-variant">AI estimated this. Change the text and it re-estimates, or type your own figure.</p>
+          </div>
+        )}
+
         {entry?.recipeId && (
           <button
             onClick={() => { onClose(); onPullIngredients(entry) }}
@@ -762,8 +917,8 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
         )}
 
         {/* Meal label */}
-        <div className="flex gap-2" role="radiogroup" aria-label="Meal">
-          {(['breakfast', 'lunch', 'dinner'] as MealLabel[]).map((l) => (
+        {!entry?.sideOf && <div className="flex gap-2" role="radiogroup" aria-label="Meal">
+          {MEAL_LABELS.map((l) => (
             <button key={l} role="radio" aria-checked={label === l} onClick={() => setLabel(l)}
               className={`flex-1 py-2 rounded-full text-sm font-bold transition-all ${
                 label === l ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
@@ -771,10 +926,10 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
               {l.charAt(0).toUpperCase() + l.slice(1)}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Repeat */}
-        <div>
+        {!entry?.sideOf && <div>
           <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Repeat</p>
           <div className="flex gap-2">
             {(['none', 'daily', 'weekly'] as SimpleRepeat[]).map((r) => (
@@ -793,7 +948,7 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
             </button>
           </div>
           {showAdvanced && <div className="mt-3"><RecurrenceEditor rule={advancedRule} onChange={setAdvancedRule} /></div>}
-        </div>
+        </div>}
 
         <button onClick={handleSave} disabled={updateMeal.isPending}
           className="w-full py-3 rounded-full bg-primary text-on-primary font-headline font-bold disabled:opacity-50">
@@ -865,6 +1020,7 @@ function MonthView({
           const hasBreakfast = entries.some((e) => e.mealLabel === 'breakfast')
           const hasLunch = entries.some((e) => e.mealLabel === 'lunch')
           const hasDinner = entries.some((e) => e.mealLabel === 'dinner')
+          const hasSnack = entries.some((e) => e.mealLabel === 'snack')
           return (
             <button
               key={date}
@@ -882,6 +1038,7 @@ function MonthView({
                 {hasBreakfast && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
                 {hasLunch && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
                 {hasDinner && <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />}
+                {hasSnack && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
               </div>
             </button>
           )
@@ -1072,11 +1229,13 @@ function SelectedDay({
   date,
   entries,
   onAdd,
+  onAddSide,
   onEdit,
 }: {
   date: string
   entries: MealPlanEntry[]
   onAdd: (label?: MealLabel) => void
+  onAddSide: (meal: MealPlanEntry) => void
   onEdit: (entry: MealPlanEntry) => void
 }) {
   const isToday = date === toLocalIso()
@@ -1091,7 +1250,7 @@ function SelectedDay({
           </h2>
         </div>
       </div>
-      <DayAgenda entries={entries} onAdd={onAdd} onEdit={onEdit} />
+      <DayAgenda entries={entries} onAdd={onAdd} onAddSide={onAddSide} onEdit={onEdit} />
     </>
   )
 }
@@ -1106,6 +1265,7 @@ export function PlannerPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(todayIso)
   const [addingToDate, setAddingToDate] = useState<string | null>(null)
   const [addingLabel, setAddingLabel] = useState<MealLabel | undefined>(undefined)
+  const [addingSideOf, setAddingSideOf] = useState<MealPlanEntry | null>(null)
   const [pullingEntry, setPullingEntry] = useState<MealPlanEntry | null>(null)
   const [editingEntry, setEditingEntry] = useState<MealPlanEntry | null>(null)
   const { dailyDozenEnabled } = usePrefsStore()
@@ -1151,8 +1311,8 @@ export function PlannerPage() {
     categoryByDate[date] = classifyDay(
       dayEntries.map((e) => ({
         recipeTitle: e.recipe?.title,
-        ingredientNames: e.recipeId
-          ? (recipeMap[e.recipeId]?.ingredients?.map((i) => i.name) ?? [])
+        ingredients: e.recipeId
+          ? (recipeMap[e.recipeId]?.ingredients?.map((i) => ({ name: i.name, quantity: i.quantity, unit: i.unit })) ?? [])
           : [],
         noteText: e.noteText,
         dayNote: e.dayNote,
@@ -1232,6 +1392,7 @@ export function PlannerPage() {
               date={selectedDate}
               entries={byDate[selectedDate] ?? []}
               onAdd={openAdd(selectedDate)}
+              onAddSide={(meal) => { setAddingSideOf(meal); setAddingToDate(meal.date) }}
               onEdit={setEditingEntry}
             />
             {dailyDozenEnabled && (
@@ -1247,10 +1408,11 @@ export function PlannerPage() {
       </div>
 
       <AddMealSheet
-        key={`${addingToDate}-${addingLabel}`}
+        key={`${addingToDate}-${addingLabel}-${addingSideOf?.id}`}
         date={addingToDate}
         defaultLabel={addingLabel}
-        onClose={() => { setAddingToDate(null); setAddingLabel(undefined) }}
+        sideOf={addingSideOf}
+        onClose={() => { setAddingToDate(null); setAddingLabel(undefined); setAddingSideOf(null) }}
       />
 
       <IngredientPullSheet entry={pullingEntry} onClose={() => setPullingEntry(null)} />

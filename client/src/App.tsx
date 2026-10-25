@@ -4,6 +4,7 @@ import { ProtectedRoute, AppLayout } from './components/layout/AppLayout'
 import { useAuthStore } from './store/authStore'
 import { useRealtime } from './hooks/useRealtime'
 import { api } from './lib/api'
+import { useNavFeatures } from './store/prefsStore'
 import { InstallBanner } from './components/shared/InstallBanner'
 
 // Auth
@@ -16,6 +17,7 @@ const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').th
 const FamilySetupPage = lazy(() => import('./pages/family/FamilySetupPage').then((m) => ({ default: m.FamilySetupPage })))
 
 // Main app pages
+const StreaksPage = lazy(() => import('./pages/streaks/StreaksPage').then((m) => ({ default: m.StreaksPage })))
 const PlannerPage = lazy(() => import('./pages/planner/PlannerPage').then((m) => ({ default: m.PlannerPage })))
 const RecipesPage = lazy(() => import('./pages/recipes/RecipesPage').then((m) => ({ default: m.RecipesPage })))
 const RecipeDetailPage = lazy(() => import('./pages/recipes/RecipeDetailPage').then((m) => ({ default: m.RecipeDetailPage })))
@@ -48,6 +50,7 @@ function PageLoader() {
 export default function App() {
   const token = useAuthStore((s) => s.token)
   useRealtime(token)
+  const home = useNavFeatures()[0].to
 
   // Validate the stored session on launch and pick up server-side profile changes.
   useEffect(() => {
@@ -86,7 +89,8 @@ export default function App() {
         {/* Main app — authenticated + has family */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/planner" replace />} />
+            <Route index element={<Navigate to={home} replace />} />
+            <Route path="/streaks" element={<StreaksPage />} />
             <Route path="/planner" element={<PlannerPage />} />
             <Route path="/recipes" element={<RecipesPage />} />
             <Route path="/recipes/import" element={<RecipeImportPage />} />
@@ -101,7 +105,7 @@ export default function App() {
         </Route>
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/planner" replace />} />
+        <Route path="*" element={<Navigate to={home} replace />} />
       </Routes>
     </Suspense>
     </>

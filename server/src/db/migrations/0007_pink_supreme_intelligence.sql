@@ -1,0 +1,1 @@
+ALTER TABLE `meal_plan` ADD `side_of` text;
