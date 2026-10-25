@@ -1,15 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom'
-
-const tabs = [
-  { to: '/streaks', icon: 'local_fire_department', label: 'Streaks' },
-  { to: '/planner', icon: 'calendar_today', label: 'Meal Plan' },
-  { to: '/recipes', icon: 'restaurant_menu', label: 'Recipes' },
-  { to: '/shopping', icon: 'shopping_basket', label: 'Shopping' },
-  { to: '/family', icon: 'group', label: 'Family' },
-] as const
+import { useNavFeatures } from '../../store/prefsStore'
 
 export function BottomNav() {
   const location = useLocation()
+  const tabs = useNavFeatures()
 
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 bg-white/90 backdrop-blur-xl border-t border-outline-variant/40 shadow-nav-top">

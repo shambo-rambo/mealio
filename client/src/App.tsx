@@ -4,6 +4,7 @@ import { ProtectedRoute, AppLayout } from './components/layout/AppLayout'
 import { useAuthStore } from './store/authStore'
 import { useRealtime } from './hooks/useRealtime'
 import { api } from './lib/api'
+import { useNavFeatures } from './store/prefsStore'
 import { InstallBanner } from './components/shared/InstallBanner'
 
 // Auth
@@ -49,6 +50,7 @@ function PageLoader() {
 export default function App() {
   const token = useAuthStore((s) => s.token)
   useRealtime(token)
+  const home = useNavFeatures()[0].to
 
   // Validate the stored session on launch and pick up server-side profile changes.
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function App() {
         {/* Main app — authenticated + has family */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/streaks" replace />} />
+            <Route index element={<Navigate to={home} replace />} />
             <Route path="/streaks" element={<StreaksPage />} />
             <Route path="/planner" element={<PlannerPage />} />
             <Route path="/recipes" element={<RecipesPage />} />
@@ -103,7 +105,7 @@ export default function App() {
         </Route>
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/streaks" replace />} />
+        <Route path="*" element={<Navigate to={home} replace />} />
       </Routes>
     </Suspense>
     </>
