@@ -23,11 +23,11 @@
 
   /* Typography: tracking is size-specific — tight on large text, open on small */
   h1, h2, h3 {
-    letter-spacing: -0.02em;
-    line-height: 1.15;
+    letter-spacing: -0.012em;
+    word-spacing: 0.03em;
+    line-height: 1.2;
     font-optical-sizing: auto;
   }
-  h1 { letter-spacing: -0.025em; }
 
   /* Response: feedback on press-down, not release. Instant in, eased out. */
   button:not(:disabled),
