@@ -209,8 +209,8 @@ function GoalCheck({ goal, date, data, plan }: { goal: StreakGoal; date: string;
             </p>
             <p className="text-xs text-on-surface-variant">
               {plan && plan.meals > 0
-                ? `Automatic: totalled from your meal plan (one serving of each meal and snack)${plan.uncounted ? `, not counting ${plan.uncounted} without calorie info` : ''}. Change the plan to change it.`
-                : 'Automatic: nothing planned for this day yet. Add meals or snacks to the plan.'}
+                ? `From your meal plan${plan.uncounted ? `, not counting ${plan.uncounted} without calorie info` : ''}.`
+                : 'Nothing planned for this day yet.'}
             </p>
           </>
         )
@@ -257,8 +257,8 @@ function GoalEditorForm({ goal, onClose }: { goal: StreakGoal | null; onClose: (
 
   const types: { id: GoalType; label: string; hint: string }[] = [
     { id: 'custom', label: 'My own goal', hint: 'Tick it off whenever you do it' },
-    { id: 'calories', label: 'Daily calorie limit', hint: 'Automatic from your meal plan' },
-    { id: 'daily_dozen', label: 'Daily Dozen foods', hint: 'Automatic from your meal plan' },
+    { id: 'calories', label: 'Daily calorie limit', hint: 'From your meal plan' },
+    { id: 'daily_dozen', label: 'Daily Dozen foods', hint: 'From your meal plan' },
   ]
 
   const submit = () => {
@@ -424,9 +424,9 @@ export function StreaksPage() {
                 const autoOk = auto && count > 0 && meetsGoal(g, count)
                 const good = auto ? autoOk : done?.achieved
                 const status = g.type === 'daily_dozen'
-                  ? `${count}/${DAILY_DOZEN.length} groups today · automatic`
+                  ? `${count}/${DAILY_DOZEN.length} groups today`
                   : g.type === 'calories'
-                    ? `${count} of ${Math.round(g.target ?? 0)} kcal planned today · automatic`
+                    ? `${count} of ${Math.round(g.target ?? 0)} kcal planned today`
                     : done ? (done.achieved ? 'Done' : 'Not today') : goalSubtitle(g)
                 const circle = (
                   <span className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
