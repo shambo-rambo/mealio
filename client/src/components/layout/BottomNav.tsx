@@ -6,7 +6,7 @@ export function BottomNav() {
   const tabs = useNavFeatures()
 
   return (
-    <nav className="fixed bottom-0 left-0 w-full z-50 bg-white/90 backdrop-blur-xl border-t border-outline-variant/40 shadow-nav-top">
+    <nav className="fixed bottom-0 left-0 w-full z-50 bg-white/75 backdrop-blur-2xl backdrop-saturate-[1.8] shadow-nav-top [box-shadow:0_-1px_0_rgba(24,29,24,0.06),0_-12px_32px_-16px_rgba(26,26,26,0.12)]">
       <div className="flex justify-around items-center h-20 px-2 pb-safe">
         {tabs.map(({ to, icon, label }) => {
           const active = location.pathname.startsWith(to)
@@ -25,7 +25,7 @@ export function BottomNav() {
                 </span>
               </span>
               <span
-                className={`text-[11px] tracking-wide transition-colors ${
+                className={`text-[11px] tracking-[0.01em] transition-colors ${
                   active ? 'text-primary font-bold' : 'text-on-surface-variant font-medium'
                 }`}
               >
