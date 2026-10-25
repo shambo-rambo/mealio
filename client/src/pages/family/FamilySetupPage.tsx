@@ -15,12 +15,12 @@ export function FamilySetupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const createFamily = async () => {
-    if (!familyName.trim()) return
+  const createFamily = async (name = familyName) => {
+    if (!name.trim()) return
     setError('')
     setLoading(true)
     try {
-      const { data } = await api.post<{ token: string; user: User }>('/family', { name: familyName })
+      const { data } = await api.post<{ token: string; user: User }>('/family', { name })
       setAuth(data.token, data.user)
       navigate('/shopping', { replace: true })
     } catch (err) {
@@ -51,8 +51,8 @@ export function FamilySetupPage() {
         <button onClick={() => setStep('choose')} className="material-symbols-outlined text-primary mb-8 self-start">
           arrow_back
         </button>
-        <h1 className="font-headline font-bold text-2xl text-on-surface mb-2">Create your family</h1>
-        <p className="text-on-surface-variant text-sm mb-8">Give your family group a name. You can change this later.</p>
+        <h1 className="font-headline font-bold text-2xl text-on-surface mb-2">Name your household</h1>
+        <p className="text-on-surface-variant text-sm mb-8">Give your group a name. You can change this later.</p>
 
         <input
           type="text"
@@ -71,11 +71,11 @@ export function FamilySetupPage() {
         )}
 
         <button
-          onClick={createFamily}
+          onClick={() => createFamily()}
           disabled={loading || !familyName.trim()}
           className="w-full py-3.5 rounded-full bg-primary text-on-primary font-headline font-bold text-base shadow-fab disabled:opacity-60 mt-6"
         >
-          {loading ? 'Creating…' : 'Create family'}
+          {loading ? 'Creating…' : 'Create household'}
         </button>
       </div>
     )
@@ -87,7 +87,7 @@ export function FamilySetupPage() {
         <button onClick={() => setStep('choose')} className="material-symbols-outlined text-primary mb-8 self-start">
           arrow_back
         </button>
-        <h1 className="font-headline font-bold text-2xl text-on-surface mb-2">Join a family</h1>
+        <h1 className="font-headline font-bold text-2xl text-on-surface mb-2">Join someone</h1>
         <p className="text-on-surface-variant text-sm mb-8">Enter the 6-digit code from a family member.</p>
 
         <input
@@ -113,7 +113,7 @@ export function FamilySetupPage() {
           disabled={loading || code.length !== 6}
           className="w-full py-3.5 rounded-full bg-primary text-on-primary font-headline font-bold text-base shadow-fab disabled:opacity-60 mt-6"
         >
-          {loading ? 'Joining…' : 'Join family'}
+          {loading ? 'Joining…' : 'Join'}
         </button>
       </div>
     )
@@ -129,13 +129,37 @@ export function FamilySetupPage() {
             group
           </span>
         </div>
-        <h1 className="font-headline font-bold text-2xl text-on-surface">Set up your family</h1>
+        <h1 className="font-headline font-bold text-2xl text-on-surface">How will you use Food Prep?</h1>
         <p className="text-on-surface-variant text-sm mt-2">
-          Create a new family group or join one that already exists.
+          Cook for yourself or share with others. You can invite people any time.
         </p>
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-error-container text-on-error-container text-sm mb-4">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          {error}
+        </div>
+      )}
+
       <div className="space-y-4">
+        <button
+          onClick={() => createFamily(`${user?.name.split(' ')[0] ?? 'My'}'s Kitchen`)}
+          disabled={loading}
+          className="w-full p-5 rounded-2xl bg-surface-container-lowest border-2 border-primary/20 text-left hover:border-primary/50 transition-colors shadow-card disabled:opacity-60"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-outlined text-primary">person</span>
+            </div>
+            <div>
+              <p className="font-headline font-bold text-on-surface">{loading ? 'Setting up…' : 'Just me'}</p>
+              <p className="text-sm text-on-surface-variant mt-0.5">Plan and shop solo</p>
+            </div>
+            <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
+          </div>
+        </button>
+
         <button
           onClick={() => setStep('create')}
           className="w-full p-5 rounded-2xl bg-surface-container-lowest border-2 border-primary/20 text-left hover:border-primary/50 transition-colors shadow-card"
@@ -145,8 +169,8 @@ export function FamilySetupPage() {
               <span className="material-symbols-outlined text-primary">add_circle</span>
             </div>
             <div>
-              <p className="font-headline font-bold text-on-surface">Create a family</p>
-              <p className="text-sm text-on-surface-variant mt-0.5">Start fresh and invite your family</p>
+              <p className="font-headline font-bold text-on-surface">Start a household</p>
+              <p className="text-sm text-on-surface-variant mt-0.5">Share plans and lists with family or housemates</p>
             </div>
             <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
           </div>
@@ -161,7 +185,7 @@ export function FamilySetupPage() {
               <span className="material-symbols-outlined text-secondary">group_add</span>
             </div>
             <div>
-              <p className="font-headline font-bold text-on-surface">Join a family</p>
+              <p className="font-headline font-bold text-on-surface">Join someone</p>
               <p className="text-sm text-on-surface-variant mt-0.5">Enter a 6-digit invite code</p>
             </div>
             <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
