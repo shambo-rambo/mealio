@@ -96,12 +96,10 @@ export function AccountMenu() {
               Daily goals
             </button>
           )}
-          {features.includes('family') && (
-            <button role="menuitem" onClick={() => go('/family')} className={item}>
-              <span className="material-symbols-outlined text-[20px] text-on-surface-variant">group</span>
-              Family members &amp; invites
-            </button>
-          )}
+          <button role="menuitem" onClick={() => go('/family')} className={item}>
+            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">group</span>
+            Family
+          </button>
           {features.includes('shopping') && (
             <button role="menuitem" onClick={() => go('/stores')} className={item}>
               <span className="material-symbols-outlined text-[20px] text-on-surface-variant">store</span>

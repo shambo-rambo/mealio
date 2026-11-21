@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Allergen } from '../types'
-import { DEFAULT_NAV_ORDER, FEATURE_BY_ID, type FeatureId } from '../lib/features'
+import { DEFAULT_HIDDEN, DEFAULT_NAV_ORDER, FEATURE_BY_ID, type FeatureId } from '../lib/features'
 
 interface PrefsState {
   /** Features shown in the nav bar, in display order. Never empty. */
@@ -22,7 +22,7 @@ export const usePrefsStore = create<PrefsState>()(
   persist(
     (set) => ({
       navOrder: DEFAULT_NAV_ORDER,
-      navHidden: [],
+      navHidden: DEFAULT_HIDDEN,
       setFeatureEnabled: (id, enabled) =>
         set((s) => {
           const hidden = enabled ? s.navHidden.filter((x) => x !== id) : [...s.navHidden, id]
@@ -39,7 +39,7 @@ export const usePrefsStore = create<PrefsState>()(
           ;[next[i], next[j]] = [next[j], next[i]]
           return { navOrder: next }
         }),
-      resetNav: () => set({ navOrder: DEFAULT_NAV_ORDER, navHidden: [] }),
+      resetNav: () => set({ navOrder: DEFAULT_NAV_ORDER, navHidden: DEFAULT_HIDDEN }),
       dailyDozenEnabled: true,
       setDailyDozenEnabled: (v) => set({ dailyDozenEnabled: v }),
       avoidAllergens: [],
@@ -52,12 +52,20 @@ export const usePrefsStore = create<PrefsState>()(
     }),
     {
       name: 'mealio-prefs',
+      version: 1,
+      // v1: Streaks became opt-in, so hide it once for existing users.
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Partial<PrefsState>
+        if (version < 1) p.navHidden = Array.from(new Set([...(p.navHidden ?? []), ...DEFAULT_HIDDEN]))
+        return p as PrefsState
+      },
       // Keep stored nav order valid if features are added or removed in a later version.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PrefsState>
         const order = (p.navOrder ?? []).filter((id) => id in FEATURE_BY_ID)
         const missing = DEFAULT_NAV_ORDER.filter((id) => !order.includes(id))
-        return { ...current, ...p, navOrder: [...order, ...missing] }
+        const hidden = (p.navHidden ?? []).filter((id) => id in FEATURE_BY_ID)
+        return { ...current, ...p, navOrder: [...order, ...missing], navHidden: hidden }
       },
     },
   ),

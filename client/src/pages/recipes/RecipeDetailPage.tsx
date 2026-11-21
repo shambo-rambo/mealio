@@ -5,6 +5,7 @@ import { BottomSheet } from '../../components/shared/BottomSheet'
 import { Skeleton } from '../../components/shared/Skeleton'
 import { toast } from '../../components/shared/Toast'
 import { AddToListSheet } from '../../components/shared/AddToListSheet'
+import { AddToPlanSheet } from '../../components/shared/AddToPlanSheet'
 import { useRecipeQuery, useRateRecipeMutation, useDeleteRecipeMutation, scaleIngredients } from '../../hooks/useRecipes'
 import { DIETARY_TAG_LABELS, type DietaryTag } from '../../types'
 import { AllergenWarning } from '../../components/shared/AllergenWarning'
@@ -43,6 +44,7 @@ export function RecipeDetailPage() {
   const deleteRecipe = useDeleteRecipeMutation()
   const [servings, setServings] = useState<number | null>(null)
   const [addToListOpen, setAddToListOpen] = useState(false)
+  const [addToPlanOpen, setAddToPlanOpen] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showShare, setShowShare] = useState(false)
@@ -206,10 +208,19 @@ export function RecipeDetailPage() {
                 </span>
                 Start cooking
               </button>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => setAddToPlanOpen(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-container text-primary font-headline font-bold text-sm active:scale-[0.98] transition-transform"
+              >
+                <span className="material-symbols-outlined text-[20px]">calendar_add_on</span>
+                Add to plan
+              </button>
               <button
                 onClick={() => setAddToListOpen(true)}
                 aria-label="Add to shopping list"
-                className="flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-surface-container text-primary font-headline font-bold text-sm active:scale-[0.98] transition-transform"
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-surface-container text-primary font-headline font-bold text-sm active:scale-[0.98] transition-transform"
               >
                 <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
                 Add to list
@@ -396,6 +407,8 @@ export function RecipeDetailPage() {
           </div>
         </div>
       </BottomSheet>
+
+      <AddToPlanSheet recipeId={id ?? null} open={addToPlanOpen} onClose={() => setAddToPlanOpen(false)} />
 
       <AddToListSheet
         recipeId={id ?? null}
