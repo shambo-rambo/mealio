@@ -185,6 +185,8 @@ export interface MealPlanEntry {
   recurrenceRule: string | null
   parentId: string | null
   createdBy: string | null
+  /** false = private to createdBy */
+  shared: boolean
   // Relations
   recipe?: Pick<Recipe, 'id' | 'title' | 'pictureUrl' | 'prepTime' | 'cookTime' | 'calories'>
 }
@@ -272,6 +274,7 @@ export function aisleRank(item: { aisle?: string | null; category: string | null
 }
 
 export interface PendingMealPlan {
+  shared?: boolean
   date: string
   mealLabel: MealLabel
 }
