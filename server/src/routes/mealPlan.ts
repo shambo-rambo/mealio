@@ -17,6 +17,11 @@ mealPlanRoutes.use('*', authMiddleware)
 const MEAL_PLAN_COLS = 13
 const CHUNK_SIZE = Math.max(1, Math.floor(99 / MEAL_PLAN_COLS)) // 7
 
+/** Private entries are only visible to the person who made them. */
+function canSee(e: { shared: boolean; createdBy: string | null }, userId: string) {
+  return e.shared || e.createdBy === userId
+}
+
 function inChunks<T>(arr: T[]): T[][] {
   const result: T[][] = []
   for (let i = 0; i < arr.length; i += CHUNK_SIZE) result.push(arr.slice(i, i + CHUNK_SIZE))
@@ -25,7 +30,7 @@ function inChunks<T>(arr: T[]): T[][] {
 
 mealPlanRoutes.get('/', async (c) => {
   const db = c.get('db')
-  const { familyId } = c.get('user')
+  const { familyId, userId } = c.get('user')
   if (!familyId) return c.json({ entries: [] })
 
   const start = c.req.query('start')
@@ -35,6 +40,7 @@ mealPlanRoutes.get('/', async (c) => {
     where: eq(mealPlan.familyId, familyId),
   })
 
+  entries = entries.filter((e) => canSee(e, userId))
   if (start) entries = entries.filter((e) => e.date >= start)
   if (end) entries = entries.filter((e) => e.date <= end)
   entries.sort((a, b) => a.date.localeCompare(b.date))
@@ -65,6 +71,7 @@ const mealPlanBodySchema = z.object({
   dayNote: z.string().nullable().optional(),
   isRecurring: z.boolean().optional(),
   recurrenceRule: z.string().nullable().optional(),
+  shared: z.boolean().optional(),
 })
 
 const mealPlanCreateSchema = mealPlanBodySchema.extend({ sideOf: z.string().nullable().optional() })
@@ -87,15 +94,17 @@ mealPlanRoutes.post('/', async (c) => {
 
   const { recipeId, noteText, dayNote } = result.data
   let { date, mealLabel, isRecurring, recurrenceRule } = result.data
+  let shared = result.data.shared ?? true
   const sideOf = result.data.sideOf ?? null
   if (sideOf) {
     // A side sits in its meal's day and slot and never repeats on its own.
     const parent = await db.query.mealPlan.findFirst({ where: eq(mealPlan.id, sideOf) })
-    if (!parent || parent.familyId !== familyId || parent.sideOf) {
+    if (!parent || parent.familyId !== familyId || parent.sideOf || !canSee(parent, userId)) {
       return c.json({ error: { code: 'validation_error', message: 'Meal not found' } }, 400)
     }
     date = parent.date
     mealLabel = parent.mealLabel
+    shared = parent.shared
     isRecurring = false
     recurrenceRule = null
   }
@@ -108,7 +117,7 @@ mealPlanRoutes.post('/', async (c) => {
   const entryId = crypto.randomUUID()
   const [entry] = await db.insert(mealPlan).values({
     id: entryId, familyId, date, mealLabel,
-    recipeId: recipeId ?? null, noteText: noteText ?? null, calories, dayNote: dayNote ?? null, sideOf,
+    recipeId: recipeId ?? null, noteText: noteText ?? null, calories, dayNote: dayNote ?? null, sideOf, shared,
     isRecurring: isRecurring ?? false, recurrenceRule: recurrenceRule ?? null,
     parentId: null, createdBy: userId,
   }).returning()
@@ -121,7 +130,7 @@ mealPlanRoutes.post('/', async (c) => {
         const rows = futureDates.map((d) => ({
           familyId, date: d, mealLabel,
           recipeId: recipeId ?? null, noteText: noteText ?? null, calories,
-          isRecurring: true, recurrenceRule, parentId: entryId, createdBy: userId,
+          isRecurring: true, recurrenceRule, parentId: entryId, createdBy: userId, shared,
         }))
         for (const chunk of inChunks(rows)) {
           await db.insert(mealPlan).values(chunk)
@@ -146,7 +155,7 @@ mealPlanRoutes.post('/', async (c) => {
 
 mealPlanRoutes.patch('/:id', async (c) => {
   const db = c.get('db')
-  const { familyId } = c.get('user')
+  const { familyId, userId } = c.get('user')
   const id = c.req.param('id')
   const scope = c.req.query('scope') ?? 'one'
 
@@ -155,9 +164,12 @@ mealPlanRoutes.patch('/:id', async (c) => {
   if (!result.success) return c.json({ error: { code: 'validation_error', message: 'Invalid data' } }, 400)
 
   const entry = await db.query.mealPlan.findFirst({ where: eq(mealPlan.id, id) })
-  if (!entry || entry.familyId !== familyId) {
+  if (!entry || entry.familyId !== familyId || !canSee(entry, userId)) {
     return c.json({ error: { code: 'not_found', message: 'Entry not found' } }, 404)
   }
+
+  // Only the person who made a meal can change who it is shared with.
+  if (entry.createdBy !== userId) delete result.data.shared
 
   // Changing a note's text re-estimates its calories (unless the caller supplied a figure); a recipe has none of its own.
   const update = { ...result.data }
@@ -183,6 +195,20 @@ mealPlanRoutes.patch('/:id', async (c) => {
   } else {
     await db.update(mealPlan).set(update).where(eq(mealPlan.id, id))
     if (update.mealLabel) await db.update(mealPlan).set({ mealLabel: update.mealLabel }).where(eq(mealPlan.sideOf, id))
+  }
+  // Sides follow their meal's sharing.
+  if (update.shared !== undefined) {
+    const ids = [id]
+    if (scope === 'series' && entry.parentId) {
+      const series = await db.query.mealPlan.findMany({
+        where: and(eq(mealPlan.parentId, entry.parentId), gte(mealPlan.date, entry.date)),
+        columns: { id: true },
+      })
+      ids.push(...series.map((e) => e.id))
+    }
+    for (const chunk of inChunks(ids)) {
+      await db.update(mealPlan).set({ shared: update.shared }).where(inArray(mealPlan.sideOf, chunk))
+    }
   }
 
   // Recalculate future recurring entries whenever the recurrence settings change.
@@ -213,6 +239,7 @@ mealPlanRoutes.patch('/:id', async (c) => {
           recurrenceRule: newRecurrenceRule,
           parentId: id,
           createdBy: entry.createdBy,
+          shared: update.shared ?? entry.shared,
         }))
         for (const chunk of inChunks(rows)) {
           await db.insert(mealPlan).values(chunk)
@@ -228,12 +255,12 @@ mealPlanRoutes.patch('/:id', async (c) => {
 
 mealPlanRoutes.delete('/:id', async (c) => {
   const db = c.get('db')
-  const { familyId } = c.get('user')
+  const { familyId, userId } = c.get('user')
   const id = c.req.param('id')
   const scope = c.req.query('scope') ?? 'one'
 
   const entry = await db.query.mealPlan.findFirst({ where: eq(mealPlan.id, id) })
-  if (!entry || entry.familyId !== familyId) {
+  if (!entry || entry.familyId !== familyId || !canSee(entry, userId)) {
     return c.json({ error: { code: 'not_found', message: 'Entry not found' } }, 404)
   }
 
@@ -331,7 +358,7 @@ async function findLibraryMatches(
 
 mealPlanRoutes.post('/suggest', async (c) => {
   const db = c.get('db')
-  const { familyId } = c.get('user')
+  const { familyId, userId } = c.get('user')
   if (!familyId) return c.json({ error: { code: 'no_family', message: 'Not in a family' } }, 400)
 
   const body = await c.req.json().catch(() => null)
@@ -345,13 +372,13 @@ mealPlanRoutes.post('/suggest', async (c) => {
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
   const cutoff = twoWeeksAgo.toISOString().slice(0, 10)
 
-  const recentEntries = await db.query.mealPlan.findMany({
+  const recentEntries = (await db.query.mealPlan.findMany({
     where: and(
       eq(mealPlan.familyId, familyId),
       gte(mealPlan.date, cutoff),
       eq(mealPlan.mealLabel, mealLabel),
     ),
-  })
+  })).filter((e) => canSee(e, userId))
 
   const recentMeals: string[] = []
   const recentRecipeIds = new Set<string>()

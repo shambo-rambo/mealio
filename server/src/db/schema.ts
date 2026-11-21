@@ -237,6 +237,8 @@ export const mealPlan = sqliteTable('meal_plan', {
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
   recurrenceRule: text('recurrence_rule'),
   parentId: text('parent_id'),
+  // false = private to createdBy: hidden from the rest of the family and left out of the shopping plan.
+  shared: integer('shared', { mode: 'boolean' }).notNull().default(true),
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
 })
 

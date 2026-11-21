@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { BottomSheet } from './BottomSheet'
 import { toast } from './Toast'
 import { useAddMealMutation, toLocalIso } from '../../hooks/usePlanner'
+import { ShareToggle } from './ShareToggle'
+import { defaultShared, rememberShared } from '../../lib/sharing'
 import type { MealLabel } from '../../types'
 
 const LABELS: MealLabel[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -20,11 +22,13 @@ export function AddToPlanSheet({
   const addMeal = useAddMealMutation()
   const [date, setDate] = useState(toLocalIso())
   const [label, setLabel] = useState<MealLabel>('dinner')
+  const [shared, setShared] = useState(defaultShared('dinner'))
 
   useEffect(() => {
     if (open) {
       setDate(toLocalIso())
       setLabel('dinner')
+      setShared(defaultShared('dinner'))
     }
   }, [open])
 
@@ -37,7 +41,8 @@ export function AddToPlanSheet({
   const handleAdd = async () => {
     if (!recipeId) return
     try {
-      await addMeal.mutateAsync({ date, mealLabel: label, recipeId })
+      await addMeal.mutateAsync({ date, mealLabel: label, recipeId, shared })
+      rememberShared(label, shared)
       toast.success('Added to plan')
       onClose()
     } catch {
@@ -71,7 +76,7 @@ export function AddToPlanSheet({
               key={l}
               role="radio"
               aria-checked={label === l}
-              onClick={() => setLabel(l)}
+              onClick={() => { setLabel(l); setShared(defaultShared(l)) }}
               className={`flex-1 py-2 rounded-full text-sm font-bold transition-all ${
                 label === l ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
               }`}
@@ -80,6 +85,8 @@ export function AddToPlanSheet({
             </button>
           ))}
         </div>
+
+        <ShareToggle shared={shared} onChange={setShared} />
 
         <button
           onClick={handleAdd}

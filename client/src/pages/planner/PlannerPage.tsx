@@ -17,6 +17,9 @@ import { DAILY_DOZEN, classifyDay, type DailyDozenId } from '../../lib/dailyDoze
 import { usePrefsStore } from '../../store/prefsStore'
 import type { MealPlanEntry, MealLabel, Recipe, SuggestMessage, SuggestTurnResponse, RecipeImportResult, LibrarySuggestion } from '../../types'
 import { AllergenWarning } from '../../components/shared/AllergenWarning'
+import { ShareToggle } from '../../components/shared/ShareToggle'
+import { defaultShared, rememberShared } from '../../lib/sharing'
+import { useAuthStore } from '../../store/authStore'
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -155,6 +158,7 @@ function MealEntryCard({ entry, onEdit }: { entry: MealPlanEntry; onEdit: () => 
         <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 flex items-center gap-1 ${LABEL_TEXT_COLORS[entry.mealLabel]}`}>
           {side ? 'Side' : entry.mealLabel}
           {entry.isRecurring && <span className="material-symbols-outlined text-[12px]" aria-label="Recurring">repeat</span>}
+          {!entry.shared && <span className="material-symbols-outlined text-[12px]" aria-label="Just me">lock</span>}
         </p>
         <p className="font-headline font-semibold text-on-surface text-sm truncate">
           {entry.recipe?.title ?? entry.noteText ?? '–'}
@@ -357,7 +361,7 @@ type DisplayMsg =
   | { kind: 'recipe'; importResult: RecipeImportResult }
   | { kind: 'library'; recipes: LibrarySuggestion[] }
 
-function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealLabel: MealLabel; onClose: () => void }) {
+function SuggestSheet({ date, mealLabel, shared, onClose }: { date: string | null; mealLabel: MealLabel; shared: boolean; onClose: () => void }) {
   const navigate = useNavigate()
   const suggest = useSuggestMealMutation()
   const addMeal = useAddMealMutation()
@@ -429,7 +433,7 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
   const addLibraryRecipe = async (recipeId: string) => {
     if (!date) return
     try {
-      await addMeal.mutateAsync({ date, mealLabel, recipeId })
+      await addMeal.mutateAsync({ date, mealLabel, recipeId, shared })
       toast.success('Added to plan')
       onClose()
     } catch {
@@ -450,7 +454,7 @@ function SuggestSheet({ date, mealLabel, onClose }: { date: string | null; mealL
     if (!latestRecipe || !date) return
     onClose()
     navigate('/recipes/import/review', {
-      state: { importResult: latestRecipe, pendingMealPlan: { date, mealLabel } },
+      state: { importResult: latestRecipe, pendingMealPlan: { date, mealLabel, shared } },
     })
   }
 
@@ -589,6 +593,7 @@ function AddMealSheet({ date, defaultLabel, sideOf, onClose }: { date: string | 
   const addMeal = useAddMealMutation()
   const { data: recipes = [] } = useRecipesQuery()
   const [label, setLabel] = useState<MealLabel>(sideOf?.mealLabel ?? defaultLabel ?? 'dinner')
+  const [shared, setShared] = useState(() => defaultShared(sideOf?.mealLabel ?? defaultLabel ?? 'dinner'))
   const [recipeSearch, setRecipeSearch] = useState('')
   const [noteText, setNoteText] = useState('')
   const [noteKcal, setNoteKcal] = useState('')
@@ -624,7 +629,9 @@ function AddMealSheet({ date, defaultLabel, sideOf, onClose }: { date: string | 
         calories: mode === 'note' && noteKcal !== '' ? Math.round(Number(noteKcal)) : undefined,
         isRecurring: !sideOf && !!recurrenceRule,
         recurrenceRule: !sideOf && recurrenceRule ? JSON.stringify(recurrenceRule) : null,
+        ...(sideOf ? {} : { shared }),
       })
+      if (!sideOf) rememberShared(label, shared)
       toast.success('Added to plan')
       onClose()
     } catch {
@@ -668,7 +675,7 @@ function AddMealSheet({ date, defaultLabel, sideOf, onClose }: { date: string | 
               key={l}
               role="radio"
               aria-checked={label === l}
-              onClick={() => setLabel(l)}
+              onClick={() => { setLabel(l); setShared(defaultShared(l)) }}
               className={`flex-1 py-2 rounded-full text-sm font-bold transition-all ${
                 label === l ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
               }`}
@@ -678,9 +685,11 @@ function AddMealSheet({ date, defaultLabel, sideOf, onClose }: { date: string | 
           ))}
         </div>}
 
+        {!sideOf && <ShareToggle shared={shared} onChange={setShared} />}
+
         {/* Content */}
         {mode === 'suggest' ? (
-          <SuggestSheet date={date} mealLabel={label} onClose={onClose} />
+          <SuggestSheet date={date} mealLabel={label} shared={sideOf ? true : shared} onClose={onClose} />
         ) : mode === 'recipe' ? (
           <>
             <input
@@ -804,11 +813,14 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
   const [lastId, setLastId] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
   const [kcal, setKcal] = useState('')
+  const [shared, setShared] = useState(true)
+  const me = useAuthStore((s) => s.user?.id)
 
   // Sync state when a different entry is opened
   if (entry && entry.id !== lastId) {
     setLastId(entry.id)
     setLabel(entry.mealLabel)
+    setShared(entry.shared)
     setNoteText(entry.noteText ?? '')
     setKcal(entry.calories != null ? String(entry.calories) : '')
     setConfirmDelete(false)
@@ -847,6 +859,7 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
       await updateMeal.mutateAsync({
         id: entry.id,
         mealLabel: label,
+        ...(entry.createdBy === me && !entry.sideOf && shared !== entry.shared ? { shared } : {}),
         ...noteChanges,
         isRecurring: !entry.sideOf && !!recurrenceRule,
         recurrenceRule: !entry.sideOf && recurrenceRule ? JSON.stringify(recurrenceRule) : null,
@@ -927,6 +940,8 @@ function EditMealSheet({ entry, onClose, onPullIngredients }: { entry: MealPlanE
             </button>
           ))}
         </div>}
+
+        {entry && entry.createdBy === me && !entry.sideOf && <ShareToggle shared={shared} onChange={setShared} />}
 
         {/* Repeat */}
         {!entry?.sideOf && <div>

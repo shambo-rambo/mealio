@@ -729,7 +729,9 @@ function ShopPlanView({ listId }: { listId: string }) {
   const weekStart = weekDates[0]
   const weekEnd = weekDates[6]
 
-  const { data: entries = [], isLoading: planLoading } = useMealPlanQuery(weekStart, weekEnd)
+  const { data: planEntries = [], isLoading: planLoading } = useMealPlanQuery(weekStart, weekEnd)
+  // Private meals (e.g. your own breakfast) never feed the family shopping list.
+  const entries = planEntries.filter((e) => e.shared)
   const addItem = useAddItemMutation(listId)
   const { data: listItems } = useItemsQuery(listId)
   const { data: pantry = [] } = usePantryHistoryQuery()
