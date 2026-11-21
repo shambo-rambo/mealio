@@ -1,0 +1,1 @@
+ALTER TABLE `meal_plan` ADD `shared` integer DEFAULT true NOT NULL;

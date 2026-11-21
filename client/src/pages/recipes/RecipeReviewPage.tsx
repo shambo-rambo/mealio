@@ -56,6 +56,7 @@ export function RecipeReviewPage() {
           date: pendingMealPlan.date,
           mealLabel: pendingMealPlan.mealLabel,
           recipeId: recipe.id,
+          shared: pendingMealPlan.shared,
         })
       }
       navigate(`/recipes/${recipe.id}`, { replace: true })

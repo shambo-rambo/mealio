@@ -44,10 +44,13 @@ listsRoutes.post('/', async (c) => {
   if (!familyId) return c.json({ error: { code: 'no_family', message: 'Not in a family' } }, 400)
 
   const body = await c.req.json().catch(() => null)
-  const result = z.object({ name: z.string().min(1).max(100) }).safeParse(body)
+  const result = z.object({
+    name: z.string().min(1).max(100),
+    kind: z.enum(['shopping', 'general', 'todo', 'packing', 'gifts']).default('shopping'),
+  }).safeParse(body)
   if (!result.success) return c.json({ error: { code: 'validation_error', message: 'Name required' } }, 400)
 
-  const [list] = await db.insert(shoppingLists).values({ name: result.data.name, familyId }).returning()
+  const [list] = await db.insert(shoppingLists).values({ name: result.data.name, kind: result.data.kind, familyId }).returning()
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId, { type: 'list:created', listId: list.id })
   return c.json({ list: { ...list, itemCount: 0, uncheckedCount: 0 } }, 201)
 })
@@ -246,6 +249,16 @@ listsRoutes.post('/:id/items', async (c) => {
   if (!result.success) return c.json({ error: { code: 'validation_error', message: result.error.issues[0].message } }, 400)
 
   const { name, quantity, amount, recipe, ...rest } = result.data
+
+  // Plain checklists skip store/category/aisle filing and the AI classifier entirely.
+  if (list.kind !== 'shopping') {
+    const [item] = await db.insert(shoppingItems).values({
+      listId, name: name.trim(), note: rest.note ?? null, createdBy: userId,
+    }).returning()
+    await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:added', listId, itemId: item.id })
+    return c.json({ item: await withLines(db, item) }, 201)
+  }
+
   const key = normalizeItemName(name)
   const existing = await db.query.shoppingItems.findMany({ where: eq(shoppingItems.listId, listId) })
   // One row per product. Prefer the open row; otherwise the bought one (it's "in the pantry").
@@ -343,7 +356,7 @@ listsRoutes.patch('/:id/items/:itemId', async (c) => {
 
   await broadcastToFamily(c.env.FAMILY_ROOM, familyId!, { type: 'list:item:updated', listId, itemId })
 
-  if (result.data.checked === true) {
+  if (result.data.checked === true && list.kind === 'shopping') {
     // Bought: the recipe lines are done; the usual amount stays for next time
     await db.delete(itemLines).where(and(eq(itemLines.itemId, itemId), eq(itemLines.source, 'recipe')))
     // Bought: make sure it's back in the pantry (re-creates it if it was swiped away)

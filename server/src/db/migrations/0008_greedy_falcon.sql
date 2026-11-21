@@ -1,0 +1,1 @@
+ALTER TABLE `shopping_lists` ADD `kind` text DEFAULT 'shopping' NOT NULL;

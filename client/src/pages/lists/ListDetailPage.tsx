@@ -1,3 +1,4 @@
+import { ChecklistPage } from './ChecklistPage'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQueries, useQueryClient } from '@tanstack/react-query'
@@ -728,7 +729,9 @@ function ShopPlanView({ listId }: { listId: string }) {
   const weekStart = weekDates[0]
   const weekEnd = weekDates[6]
 
-  const { data: entries = [], isLoading: planLoading } = useMealPlanQuery(weekStart, weekEnd)
+  const { data: planEntries = [], isLoading: planLoading } = useMealPlanQuery(weekStart, weekEnd)
+  // Private meals (e.g. your own breakfast) never feed the family shopping list.
+  const entries = planEntries.filter((e) => e.shared)
   const addItem = useAddItemMutation(listId)
   const { data: listItems } = useItemsQuery(listId)
   const { data: pantry = [] } = usePantryHistoryQuery()
@@ -951,7 +954,7 @@ function ShopPlanView({ listId }: { listId: string }) {
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
-export function ListDetailPage() {
+function ShoppingListPage() {
   const { id: listId } = useParams<{ id: string }>()
   const { data: items, isLoading } = useItemsQuery(listId ?? null)
   const { data: lists = [] } = useListsQuery()
@@ -1161,4 +1164,14 @@ export function ListDetailPage() {
       </BottomSheet>
     </div>
   )
+}
+
+/** Shopping lists get the full shopping screen; every other kind is a simple checklist. */
+export function ListDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const { data: lists, isLoading } = useListsQuery()
+  const list = lists?.find((l) => l.id === id)
+  if (isLoading || !lists) return <div className="min-h-screen bg-surface" />
+  if (list && list.kind !== 'shopping') return <ChecklistPage list={list} />
+  return <ShoppingListPage />
 }

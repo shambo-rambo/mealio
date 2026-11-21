@@ -22,7 +22,8 @@ export function AddToListSheet({
   defaultServings?: number
 }) {
   const { data: recipe } = useRecipeQuery(open ? recipeId : null)
-  const { data: lists = [] } = useListsQuery()
+  const { data: allLists = [] } = useListsQuery()
+  const lists = allLists.filter((l) => l.kind === 'shopping')
   const [selectedListId, setSelectedListId] = useState('')
   const [servings, setServings] = useState(defaultServings ?? 1)
   const [selected, setSelected] = useState<Set<number>>(new Set())

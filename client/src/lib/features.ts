@@ -13,7 +13,7 @@ export const FEATURES: FeatureDef[] = [
   { id: 'streaks', to: '/streaks', icon: 'local_fire_department', label: 'Streaks', description: 'Daily goals, check-ins and streaks' },
   { id: 'planner', to: '/planner', icon: 'calendar_today', label: 'Meal Plan', description: 'Plan meals, snacks and sides for each day' },
   { id: 'recipes', to: '/recipes', icon: 'restaurant_menu', label: 'Recipes', description: 'Save, import and cook your recipes' },
-  { id: 'shopping', to: '/shopping', icon: 'shopping_basket', label: 'Shopping', description: 'Shopping lists and stores' },
+  { id: 'shopping', to: '/shopping', icon: 'checklist', label: 'Lists', description: 'Shopping lists, to-dos, packing and more' },
 ]
 
 export const FEATURE_BY_ID = Object.fromEntries(FEATURES.map((f) => [f.id, f])) as Record<FeatureId, FeatureDef>

@@ -25,6 +25,7 @@ export function useAddMealMutation() {
       sideOf?: string | null
       isRecurring?: boolean
       recurrenceRule?: string | null
+      shared?: boolean
     }) => api.post<{ entry: MealPlanEntry }>('/meal-plan', data).then((r) => r.data.entry),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plan'] }),
   })

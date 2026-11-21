@@ -32,9 +32,12 @@ export interface Store {
   familyId: string
 }
 
+export type ListKind = 'shopping' | 'general' | 'todo' | 'packing' | 'gifts'
+
 export interface ShoppingList {
   id: string
   name: string
+  kind: ListKind
   familyId: string
   isPublic: boolean
   createdAt: string
@@ -182,6 +185,8 @@ export interface MealPlanEntry {
   recurrenceRule: string | null
   parentId: string | null
   createdBy: string | null
+  /** false = private to createdBy */
+  shared: boolean
   // Relations
   recipe?: Pick<Recipe, 'id' | 'title' | 'pictureUrl' | 'prepTime' | 'cookTime' | 'calories'>
 }
@@ -269,6 +274,7 @@ export function aisleRank(item: { aisle?: string | null; category: string | null
 }
 
 export interface PendingMealPlan {
+  shared?: boolean
   date: string
   mealLabel: MealLabel
 }

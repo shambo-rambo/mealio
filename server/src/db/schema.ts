@@ -78,6 +78,8 @@ export const shoppingLists = sqliteTable('shopping_lists', {
     .notNull()
     .references(() => families.id, { onDelete: 'cascade' }),
   isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
+  // 'shopping' gets aisles, stores and recipe lines; every other kind is a plain checklist.
+  kind: text('kind', { enum: ['shopping', 'general', 'todo', 'packing', 'gifts'] }).notNull().default('shopping'),
   createdAt: createdAt(),
 })
 
@@ -235,6 +237,8 @@ export const mealPlan = sqliteTable('meal_plan', {
   isRecurring: integer('is_recurring', { mode: 'boolean' }).notNull().default(false),
   recurrenceRule: text('recurrence_rule'),
   parentId: text('parent_id'),
+  // false = private to createdBy: hidden from the rest of the family and left out of the shopping plan.
+  shared: integer('shared', { mode: 'boolean' }).notNull().default(true),
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
 })
 
