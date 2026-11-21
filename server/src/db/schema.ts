@@ -78,6 +78,8 @@ export const shoppingLists = sqliteTable('shopping_lists', {
     .notNull()
     .references(() => families.id, { onDelete: 'cascade' }),
   isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
+  // 'shopping' gets aisles, stores and recipe lines; every other kind is a plain checklist.
+  kind: text('kind', { enum: ['shopping', 'general', 'todo', 'packing', 'gifts'] }).notNull().default('shopping'),
   createdAt: createdAt(),
 })
 

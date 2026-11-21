@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { normalizeItemName } from '../lib/itemMatch'
-import type { ShoppingList, ShoppingItem, ItemHistorySuggestion } from '../types'
+import type { ShoppingList, ShoppingItem, ItemHistorySuggestion, ListKind } from '../types'
 
 // ── Lists ──────────────────────────────────────────────────────────────────
 
@@ -16,8 +16,8 @@ export function useListsQuery() {
 export function useCreateListMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (name: string) =>
-      api.post<{ list: ShoppingList }>('/lists', { name }).then((r) => r.data.list),
+    mutationFn: ({ name, kind }: { name: string; kind: ListKind }) =>
+      api.post<{ list: ShoppingList }>('/lists', { name, kind }).then((r) => r.data.list),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.lists.all() }),
   })
 }

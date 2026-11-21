@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../../components/layout/TopBar'
 import { EmptyState } from '../../components/shared/EmptyState'
 import { BottomSheet } from '../../components/shared/BottomSheet'
 import { Skeleton } from '../../components/shared/Skeleton'
 import { useListsQuery, useCreateListMutation, useDeleteListMutation } from '../../hooks/useLists'
 import { toast } from '../../components/shared/Toast'
+import { LIST_KINDS, kindOf } from '../../lib/listKinds'
+import type { ListKind } from '../../types'
 
 export function ListsPage() {
   const navigate = useNavigate()
@@ -14,17 +16,15 @@ export function ListsPage() {
   const deleteList = useDeleteListMutation()
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newKind, setNewKind] = useState<ListKind>('shopping')
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  if (!isLoading && lists && lists.length === 1) {
-    return <Navigate to={`/shopping/${lists[0].id}`} replace />
-  }
 
   const handleCreate = async () => {
     if (!newName.trim()) return
     try {
-      const list = await createList.mutateAsync(newName.trim())
+      const list = await createList.mutateAsync({ name: newName.trim(), kind: newKind })
       setNewName('')
+      setNewKind('shopping')
       setShowNew(false)
       navigate(`/shopping/${list.id}`)
     } catch {
@@ -45,7 +45,7 @@ export function ListsPage() {
 
   return (
     <div className="min-h-screen bg-surface pb-28">
-      <TopBar title="Shopping" showAvatar right={
+      <TopBar title="Lists" showAvatar right={
         <button
           onClick={() => setShowNew(true)}
           className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-fab"
@@ -61,9 +61,9 @@ export function ListsPage() {
           </div>
         ) : !lists?.length ? (
           <EmptyState
-            icon="shopping_basket"
+            icon="checklist"
             title="No lists yet"
-            description="Create your first shopping list to get started."
+            description="Make a shopping list, a to-do, a packing list or just a blank one."
             action={{ label: 'New list', onClick: () => setShowNew(true) }}
           />
         ) : (
@@ -77,13 +77,13 @@ export function ListsPage() {
                 <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <span className="material-symbols-outlined text-primary"
                     style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>
-                    shopping_basket
+                    {kindOf(list.kind).icon}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-headline font-bold text-on-surface truncate">{list.name}</p>
                   <p className="text-sm text-on-surface-variant mt-0.5">
-                    {list.uncheckedCount ?? 0} item{list.uncheckedCount !== 1 ? 's' : ''} remaining
+                    {kindOf(list.kind).label} · {list.uncheckedCount ?? 0} remaining
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -101,15 +101,33 @@ export function ListsPage() {
       </main>
 
       {/* New list sheet */}
-      <BottomSheet open={showNew} onClose={() => setShowNew(false)} title="New list" size="sm">
+      <BottomSheet open={showNew} onClose={() => setShowNew(false)} title="New list" size="lg">
         <div className="space-y-4 py-2">
+          <div className="grid grid-cols-1 gap-2">
+            {LIST_KINDS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setNewKind(k.id)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                  newKind === k.id ? 'border-primary bg-primary/10' : 'border-outline-variant bg-surface-container-low'
+                }`}
+              >
+                <span className="material-symbols-outlined text-primary text-[22px]">{k.icon}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-headline font-bold text-sm text-on-surface">{k.label}</span>
+                  <span className="block text-xs text-on-surface-variant">{k.description}</span>
+                </span>
+              </button>
+            ))}
+          </div>
           <input
             type="text"
             autoFocus
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="e.g. Weekly Shop"
+            placeholder={kindOf(newKind).placeholder}
             className="w-full px-4 py-3 rounded-xl bg-surface-container-low border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
           />
           <button

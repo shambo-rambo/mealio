@@ -32,9 +32,12 @@ export interface Store {
   familyId: string
 }
 
+export type ListKind = 'shopping' | 'general' | 'todo' | 'packing' | 'gifts'
+
 export interface ShoppingList {
   id: string
   name: string
+  kind: ListKind
   familyId: string
   isPublic: boolean
   createdAt: string
