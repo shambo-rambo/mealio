@@ -19,6 +19,9 @@ export const FEATURES: FeatureDef[] = [
 export const FEATURE_BY_ID = Object.fromEntries(FEATURES.map((f) => [f.id, f])) as Record<FeatureId, FeatureDef>
 export const DEFAULT_NAV_ORDER: FeatureId[] = FEATURES.map((f) => f.id)
 
+/** Features that start switched off until the user turns them on in Settings. */
+export const DEFAULT_HIDDEN: FeatureId[] = ['streaks']
+
 /** Which feature a URL path belongs to, if any. */
 export function featureForPath(pathname: string): FeatureDef | undefined {
   return FEATURES.find((f) => pathname === f.to || pathname.startsWith(f.to + '/'))
